@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: refundrx-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt Faker==40.43.0 && python -m scripts.generate_synthetic_data && python -m scripts.seed_db
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL        # Neon connection string
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: API_BASIC_AUTH_USER
+        sync: false
+      - key: API_BASIC_AUTH_PASSWORD
+        sync: false
+      # bge-small + onnxruntime fits the free tier's 512 MB but leaves little headroom;
+      # set to "keyword" if the service is OOM-killed.
+      - key: RAG_BACKEND
+        value: qdrant
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "20"
+
+  - type: web
+    name: refundrx-ui
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-ui.txt
+    startCommand: streamlit run ui/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: API_URL             # e.g. https://refundrx-api.onrender.com
+        sync: false
+      - key: API_BASIC_AUTH_USER
+        sync: false
+      - key: API_BASIC_AUTH_PASSWORD
+        sync: false
+      - key: APP_PASSWORD
+        sync: false

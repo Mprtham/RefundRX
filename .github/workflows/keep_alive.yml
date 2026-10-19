@@ -1,0 +1,15 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    # Set the repository variable API_HEALTH_URL, e.g. https://refundrx-api.onrender.com/health
+    if: ${{ vars.API_HEALTH_URL != '' }}
+    steps:
+      - name: Ping API health endpoint
+        run: curl -sf --max-time 90 "${{ vars.API_HEALTH_URL }}"

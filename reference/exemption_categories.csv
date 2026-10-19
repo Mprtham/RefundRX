@@ -1,0 +1,5 @@
+category,description,weight,prescription_charge,window_months,window_days_offset,requires_fp57_receipt,effective_from
+AGE,"Aged 60 or over, under 16, or 16-18 in full-time education",0.55,9.90,3,-1,true,2024-05-01
+MEDICAL,Valid medical exemption certificate (MedEx) for a specified condition,0.20,9.90,3,-1,true,2024-05-01
+MATERNITY,Valid maternity exemption certificate (pregnant or baby in the last 12 months),0.10,9.90,3,-1,true,2024-05-01
+HC2,NHS Low Income Scheme HC2 certificate (full help with health costs),0.15,9.90,3,-1,true,2024-05-01

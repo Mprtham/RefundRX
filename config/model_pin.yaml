@@ -1,0 +1,16 @@
+# Pinned LLM for the Planner node. Written verbatim into every audit_log row.
+#
+# Groq currently serves this model under the family handle below. Before
+# deploying, check the Groq console (Models page) for a dated snapshot handle
+# and pin that instead; flip `snapshot_verified` to true once you have.
+provider: groq
+model: openai/gpt-oss-120b
+snapshot_verified: false
+base_url: https://api.groq.com/openai/v1
+temperature: 0
+max_tokens: 1024
+
+# Used when GROQ_API_KEY is not set (CI, offline dev). Deterministic and
+# recorded under this name in audit_log.model_version so offline runs are
+# never mistaken for LLM runs.
+offline_fallback: offline-reference-planner-v1
