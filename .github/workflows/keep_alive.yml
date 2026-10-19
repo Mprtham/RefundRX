@@ -1,4 +1,4 @@
-name: Keep Render Alive
+name: Keep Render UI Alive
 
 on:
   schedule:
@@ -8,8 +8,10 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    # Set the repository variable API_HEALTH_URL, e.g. https://refundrx-api.onrender.com/health
-    if: ${{ vars.API_HEALTH_URL != '' }}
+    # Keep only the UI warm: two always-on services would exceed Render's free
+    # monthly hours. The API wakes on first use behind the UI's spinner.
+    # Set the repository variable UI_HEALTH_URL, e.g. https://refundrx-ui.onrender.com/_stcore/health
+    if: ${{ vars.UI_HEALTH_URL != '' }}
     steps:
-      - name: Ping API health endpoint
-        run: curl -sf --max-time 90 "${{ vars.API_HEALTH_URL }}"
+      - name: Ping UI health endpoint
+        run: curl -sf --max-time 90 "${{ vars.UI_HEALTH_URL }}"

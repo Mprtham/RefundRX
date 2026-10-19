@@ -2,7 +2,7 @@
 
 **An auditable LLM agent that decides NHSBSA FP57 prescription-charge refunds, and is evaluated on how it decides, not just what it decides.**
 
-[![CI](https://github.com/OWNER/refundrx/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/refundrx/actions/workflows/ci.yml)
+[![CI](https://github.com/Mprtham/RefundRX/actions/workflows/ci.yml/badge.svg)](https://github.com/Mprtham/RefundRX/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -115,7 +115,7 @@ streamlit run ui/streamlit_app.py              # second terminal
 pytest                                         # 10 scenarios + unit tests
 ```
 
-`python -m scripts.verify_audit_chain` checks the chain from the command line. Deployment to Render (API + UI, Neon Postgres) is described in `render.yaml`, and `.github/workflows/keep_alive.yml` pings `/health` every 10 minutes.
+`python -m scripts.verify_audit_chain` checks the chain from the command line. Deployment to Render (API + UI, Neon Postgres) is described in `render.yaml`, and `.github/workflows/keep_alive.yml` pings the UI's `/_stcore/health` every 10 minutes; the API wakes on first use.
 
 Data provenance (what's real, what's synthetic) is in [`data/README.md`](data/README.md).
 
