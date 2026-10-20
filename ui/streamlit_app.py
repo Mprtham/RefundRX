@@ -2,9 +2,11 @@
 import os
 from datetime import date, timedelta
 from html import escape
+from pathlib import Path
 
 import httpx
 import streamlit as st
+import streamlit.components.v1 as components
 
 import theme
 
@@ -15,7 +17,8 @@ API_AUTH = (
 )
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 GITHUB_URL = "https://github.com/Mprtham/RefundRX"
-DESIGN_DOC_URL = f"{GITHUB_URL}#readme"
+DESIGN_DOC_URL = f"{GITHUB_URL}#architecture"
+TAMPER_DEMO = (Path(__file__).parent / "tamper_demo.html").read_text(encoding="utf-8")
 
 st.set_page_config(page_title="RefundRx", page_icon=":material/receipt_long:", layout="wide")
 theme.apply()
@@ -97,30 +100,38 @@ st.html(f"""
 <span>Every plan, tool call and decision is logged and hash-chained, so you can audit how it decided.</span></p>
 """)
 
-with st.expander("About this project"):
-    st.markdown("""
-**What.** An agent that decides NHSBSA FP57 refund claims for patients who paid a
-prescription charge but held an exemption (age, maternity, medical, HC2).
-
-**Why.** The one UK "pharmacy refund" that is real. Pharmacies never refund dispensed
-medicines; FP57 is the only route.
-
-**Need.** Each claim turns on hard rules: an FP57 issued *at payment*, a 3-months-less-a-day
-window, a valid exemption, and one refund per form.
-
-**Gap.** LLM agents are rarely evaluated on *how* they decide, and their decisions are
-rarely auditable.
-
-**Bridge.** Planner, Gather, Decision in LangGraph. The plan is generated, every tool
-call is logged, `policy_rules` is the sole authority, and RAG text is citation only.
-Every decision is hash-chained.
-
-**Impact.** Ten DeepEval scenarios score plan quality, plan adherence and tool
-correctness, not just the final answer.
+# --- story: why, problem, what (copy shared with site/index.html) ------------
+st.html("""
+<section class='rr-story'>
+  <div class='rr-story-row'>
+    <div class='rr-eyebrow'>Why I built this</div>
+    <div class='rr-prose'>
+      <h2>I wanted to build an agent that shows its working.</h2>
+      <p>I work in pharmaceutical technology in the UK. Most AI demos I see are chatbots that sound sure of themselves and cannot say how they got to an answer. In a regulated setting that is the whole problem, so I built the opposite: a small agent whose every step is written down and can be checked afterwards.</p>
+      <p>RefundRx is a portfolio project, not a product. It runs on synthetic data, and it is built to production patterns: versioned policy, tested scenarios, and an audit trail you can verify.</p>
+    </div>
+  </div>
+  <div class='rr-story-row'>
+    <div class='rr-eyebrow'>The problem I saw</div>
+    <div class='rr-prose'>
+      <h2>Pharmacies do not refund medicines. One refund does exist.</h2>
+      <p>Once a medicine has been dispensed in the UK it cannot go back on the shelf, so there is no general pharmacy refund. The refund that does exist is the NHSBSA prescription-charge refund, claimed on form FP57, for people who paid a charge they were exempt from.</p>
+      <p>Each claim turns on hard rules: an FP57 receipt issued at the point of payment, a claim made within three months less a day, a valid exemption category, and one refund per form. A model that guesses is the wrong tool. A model that has to show its plan and its checks is a better one.</p>
+    </div>
+  </div>
+  <div class='rr-story-row'>
+    <div class='rr-eyebrow'>What it does</div>
+    <div class='rr-prose'>
+      <h2>A planner, a gatherer and a decision-maker.</h2>
+      <ol class='rr-steps'>
+        <li><span class='rr-n'>01</span><div><h3>Planner</h3><p>A language model writes an ordered plan, but it can only choose from six named checks. A plan that leaves out the receipt check is recorded as a weak plan, not quietly corrected.</p></div></li>
+        <li><span class='rr-n'>02</span><div><h3>Gather</h3><p>Runs each step in the plan and writes every tool call, its arguments and its result to a trace. Retrieving the relevant policy text is one of those logged steps.</p></div></li>
+        <li><span class='rr-n'>03</span><div><h3>Decision</h3><p>Applies the policy rules stored in the database and enforces the receipt rule whatever the plan said. It writes a hash-chained audit row, and on approval records the claim in the same transaction.</p></div></li>
+      </ol>
+    </div>
+  </div>
+</section>
 """)
-    st.caption("Out of scope: PPC refunds, HC3 partial help.")
-    st.caption("Demonstration system using synthetic data only. Not validated for clinical, regulatory, "
-               "or GxP use. No real patient data is processed. Not indemnified for real decisions.")
 
 wake_api()
 
@@ -261,6 +272,22 @@ with result_col:
                 "Pick a scenario in the sidebar and run the agent.<br>"
                 "The decision, plan, trace and policy citation appear here.</div>")
 
+# --- how I bridged the gap: tamper-evidence demo -------------------------------
+st.html("""
+<section class='rr-story rr-story-bridge'>
+  <div class='rr-story-row'>
+    <div class='rr-eyebrow'>How I bridged the gap</div>
+    <div class='rr-prose'>
+      <h2>Policy lives in the database, and the log can be checked.</h2>
+      <p>The rules are rows in Postgres, not sentences in a prompt, so they can be versioned and tested. Each decision is stored with its plan, its trace and the hash of the row before it. A verifier walks the chain and recomputes every hash.</p>
+      <p>Try it. Change a decision below and the verifier notices. Then see what someone with database access could do about that.</p>
+    </div>
+  </div>
+</section>
+""")
+components.html(TAMPER_DEMO, height=480, scrolling=True)
+st.html("<p class='rr-fineprint'>Simplified: the real audit rows hash the plan and the trace as well as the decision.</p>")
+
 # --- audit log ------------------------------------------------------------------
 st.html("<p class='rr-h2'>Audit log</p><p class='rr-sub'>Latest decisions, newest first. "
         "Each row's hash covers the previous row's hash.</p>")
@@ -303,4 +330,6 @@ with verify_col:
     else:
         st.html("<div class='rr-verify rr-muted'>integrity-checked, not externally anchored</div>")
 
-st.html("<div class='rr-footer'>Built by <b>Prathamesh Mishra</b> | FDE Portfolio Project</div>")
+st.html("<div class='rr-footer'>Built by <b>Prathamesh Mishra</b> | FDE Portfolio Project"
+        "<p>Demonstration system using synthetic data only. Not validated for clinical, regulatory or GxP use. "
+        "No real patient data is processed. Out of scope: PPC and HC3 refunds.</p></div>")

@@ -21,6 +21,7 @@ CSS = f"""
   --rr-border: #EAEAEA;
   --rr-ink: #111111;
   --rr-sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --rr-ease: cubic-bezier(.16, 1, .3, 1);
   --rr-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }}
 
@@ -60,8 +61,6 @@ CSS = f"""
 
 /* --- Containers ------------------------------------------------------------ */
 [data-testid="stForm"] {{ border: 1px solid var(--rr-border); border-radius: 6px; background: var(--rr-surface); padding: 1.25rem; }}
-[data-testid="stExpander"] details {{ border: 1px solid var(--rr-border); border-radius: 6px; background: transparent; }}
-[data-testid="stExpander"] summary {{ font-size: 0.875rem; color: var(--rr-text); }}
 [data-testid="stSpinner"] {{ color: var(--rr-muted); font-size: 0.875rem; }}
 [data-testid="stWidgetLabel"] p {{ font-size: 0.8125rem; color: var(--rr-muted); }}
 [data-testid="stCaptionContainer"] {{ color: var(--rr-muted); }}
@@ -143,6 +142,55 @@ input[aria-label="FP57 form reference"] {{ font-family: var(--rr-mono); font-siz
 @media (max-width: 640px) {{
   [data-testid="stMainBlockContainer"] {{ padding-top: 3.5rem; }}
 }}
+
+/* --- Story sections (copy shared with site/index.html) ----------------------- */
+.rr-story {{ margin: 0 0 1.5rem; }}
+.rr-story-row {{ display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 2.5rem;
+  padding: 2rem 0; border-top: 1px solid var(--rr-border); }}
+.rr-story-bridge {{ margin: 2.5rem 0 0.5rem; }}
+.rr-story-bridge .rr-story-row {{ padding-bottom: 0; }}
+.rr-eyebrow {{ font-family: var(--rr-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--rr-muted); padding-top: 0.4rem; }}
+.rr-prose h2 {{ font-family: var(--rr-sans); font-size: 1.5rem; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em;
+  color: var(--rr-ink); margin: 0 0 0.9rem; padding: 0; max-width: 28ch; }}
+.rr-prose p {{ max-width: 62ch; margin: 0 0 0.8rem; line-height: 1.65; color: var(--rr-text); }}
+.rr-steps {{ list-style: none; margin: 0.5rem 0 0; padding: 0; border-top: 1px solid var(--rr-border); }}
+.rr-steps li {{ display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; margin: 0;
+  padding: 1rem 0; border-bottom: 1px solid var(--rr-border); }}
+.rr-steps h3 {{ font-family: var(--rr-sans); font-size: 1rem; font-weight: 600; color: var(--rr-ink); margin: 0 0 0.2rem; padding: 0; }}
+.rr-steps p {{ margin: 0; }}
+.rr-n {{ font-family: var(--rr-mono); font-size: 0.8125rem; color: var(--rr-muted); padding-top: 2px; }}
+.rr-fineprint {{ font-size: 0.8125rem; color: var(--rr-muted); margin: 0.25rem 0 0; }}
+@media (max-width: 820px) {{
+  .rr-story-row {{ grid-template-columns: minmax(0, 1fr); gap: 0.6rem; padding: 1.5rem 0; }}
+}}
+
+/* --- Motion ----------------------------------------------------------------- */
+@keyframes rr-rise {{ from {{ opacity: 0; transform: translateY(12px); }} to {{ opacity: 1; transform: none; }} }}
+@keyframes rr-fade {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
+.rr-header {{ animation: rr-rise 0.5s var(--rr-ease) both; }}
+.rr-lede {{ animation: rr-rise 0.55s var(--rr-ease) 0.08s both; }}
+.rr-story-row {{ animation: rr-rise 0.6s var(--rr-ease) both; }}
+.rr-story-row:nth-child(1) {{ animation-delay: 0.16s; }}
+.rr-story-row:nth-child(2) {{ animation-delay: 0.24s; }}
+.rr-story-row:nth-child(3) {{ animation-delay: 0.32s; }}
+.rr-panel {{ animation: rr-fade 0.4s var(--rr-ease) both; }}
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-primaryFormSubmit"] {{
+  transition: background-color 0.2s var(--rr-ease), border-color 0.2s var(--rr-ease), transform 0.15s var(--rr-ease);
+}}
+[data-testid="stBaseButton-primary"]:active,
+[data-testid="stBaseButton-primaryFormSubmit"]:active {{ transform: scale(0.98); }}
+.rr-pill {{ transition: background-color 0.2s var(--rr-ease), color 0.2s var(--rr-ease), border-color 0.2s var(--rr-ease); }}
+.rr-pill:hover {{ border-color: currentColor; }}
+.rr-nav a {{ transition: color 0.2s var(--rr-ease); }}
+@media (prefers-reduced-motion: reduce) {{
+  [data-testid="stApp"] *, [data-testid="stApp"] *::before, [data-testid="stApp"] *::after {{
+    animation: none !important; transition: none !important;
+  }}
+}}
+
+.rr-footer p {{ margin: 0.35rem 0 0; font-size: 0.75rem; }}
 
 .rr-sub {{ font-size: 0.8125rem; color: var(--rr-muted); margin: 0 0 0.75rem; }}
 """

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Tamper-evidence ledger demo, embedded by ui/streamlit_app.py with
+     st.components.v1.html. CSS, markup and JS are copied unchanged from
+     site/index.html (branch landing-page); only the demo's parts are kept. -->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,500;0,6..72,700;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F7F6F3; --surface:#FFFFFF; --ink:#1F2326; --ink-2:#4A4F52; --muted:#6B6964;
+  --line:#E6E4DE; --line-2:#D9D6CE;
+  --ok-bg:#EDF3EC; --ok-fg:#346538; --bad-bg:#FDEBEC; --bad-fg:#9F2F2D; --warn-bg:#FBF3DB; --warn-fg:#956400;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --serif:'Newsreader',Georgia,'Times New Roman',serif;
+  --sans:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Geist Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-x:hidden}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px}
+
+/* ---------- tamper demo ---------- */
+.ledger{margin-top:28px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.lhead,.lrow{display:grid;grid-template-columns:64px 1fr 92px 92px 132px;gap:16px;align-items:center;padding:14px 20px}
+.lhead{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+.lrow+.lrow{border-top:1px solid var(--line)}
+.lrow input{width:100%;font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.lrow input:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.hx{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.pill{display:inline-block;font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:999px;transition:background-color .25s ease,color .25s ease}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.btn{font:inherit;font-size:14px;padding:10px 18px;border-radius:6px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;transition:background-color .2s ease,transform .15s ease}
+.btn:hover{background:#333}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:rgba(31,35,38,.06)}
+.msg{margin-top:16px;font-family:var(--mono);font-size:13px;line-height:1.55;color:var(--ink-2);min-height:4.6em;max-width:72ch}
+.msg.ok{color:var(--ok-fg)} .msg.bad{color:var(--bad-fg)} .msg.warn{color:var(--warn-fg)}
+.fineprint{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:62ch}
+
+@media (max-width:820px){
+  .lhead{display:none}
+  .lrow{grid-template-columns:1fr 1fr;gap:10px 16px}
+  .lrow .c-id{order:1}
+  .lrow .c-status{order:2;justify-self:end}
+  .lrow .c-input{order:3;grid-column:1/-1}
+  .lrow .c-prev{order:4}
+  .lrow .c-hash{order:5}
+  .lrow .c-prev::before{content:'prev ';color:var(--muted)}
+  .lrow .c-hash::before{content:'hash ';color:var(--muted)}
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html.js .reveal{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+        <div class="ledger" role="group" aria-label="Tamper-evidence demo">
+          <div class="lhead"><span>Row</span><span>Decision (editable)</span><span>prev_hash</span><span>hash</span><span>Status</span></div>
+          <div id="ledger-body"></div>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" id="btn-rewrite" type="button">Rewrite the hashes (attacker with DB access)</button>
+          <button class="btn ghost" id="btn-reset" type="button">Reset</button>
+        </div>
+        <p class="msg" id="ledger-msg" role="status" aria-live="polite">Loading the demo...</p>
+        <noscript><p class="fineprint">This demo needs JavaScript.</p></noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- hashing (Web Crypto, SHA-256) ---------- */
+  var hasCrypto = !!(window.crypto && window.crypto.subtle);
+  var enc = new TextEncoder();
+  function sha256Hex(s) {
+    return window.crypto.subtle.digest('SHA-256', enc.encode(s)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+  function short(h) { return h.slice(0, 8); }
+
+  /* ---------- tamper-evidence demo ---------- */
+  var INITIAL = [
+    { id: '0417', text: 'APPROVED: HC2, receipt present, in window' },
+    { id: '0418', text: 'REJECTED: no FP57 receipt' },
+    { id: '0419', text: 'REJECTED: outside the 3-month window' }
+  ];
+  var body = document.getElementById('ledger-body');
+  var msg = document.getElementById('ledger-msg');
+  var btnRewrite = document.getElementById('btn-rewrite');
+  var btnReset = document.getElementById('btn-reset');
+  var rows = [];
+  var verifyToken = 0;
+
+  function edited() {
+    return rows.some(function (r, i) { return r.text !== INITIAL[i].text; });
+  }
+
+  function buildRows() {
+    var prev = 'GENESIS';
+    var p = Promise.resolve();
+    rows = [];
+    INITIAL.forEach(function (r) {
+      p = p.then(function () {
+        return sha256Hex(prev + '|' + r.text).then(function (h) {
+          rows.push({ id: r.id, text: r.text, prev: prev, hash: h });
+          prev = h;
+        });
+      });
+    });
+    return p;
+  }
+
+  function renderRows() {
+    body.innerHTML = '';
+    rows.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'lrow';
+      row.innerHTML =
+        '<div class="c-id hx">' + r.id + '</div>' +
+        '<div class="c-input"><input type="text" spellcheck="false" aria-label="Decision text for row ' + r.id + '"></div>' +
+        '<div class="c-prev hx" data-k="prev"></div>' +
+        '<div class="c-hash hx" data-k="hash"></div>' +
+        '<div class="c-status"><span class="pill"></span></div>';
+      var input = row.querySelector('input');
+      input.value = r.text;
+      input.addEventListener('input', function () { r.text = input.value; runVerify(); });
+      body.appendChild(row);
+    });
+  }
+
+  function runVerify() {
+    var token = ++verifyToken;
+    var expectedPrev = 'GENESIS';
+    var results = [];
+    var p = Promise.resolve();
+    rows.forEach(function (r, i) {
+      p = p.then(function () {
+        if (r.prev !== expectedPrev) { results[i] = 'link'; expectedPrev = r.hash; return; }
+        return sha256Hex(r.prev + '|' + r.text).then(function (h) {
+          results[i] = (h === r.hash) ? 'ok' : 'hash';
+          expectedPrev = r.hash;
+        });
+      });
+    });
+    return p.then(function () { if (token === verifyToken) paint(results); });
+  }
+
+  function paint(results) {
+    var firstBad = -1;
+    rows.forEach(function (r, i) {
+      var el = body.children[i];
+      el.querySelector('[data-k="prev"]').textContent = r.prev === 'GENESIS' ? 'GENESIS' : short(r.prev);
+      el.querySelector('[data-k="hash"]').textContent = short(r.hash);
+      var pl = el.querySelector('.pill');
+      pl.className = 'pill ' + (results[i] === 'ok' ? 'ok' : 'bad');
+      pl.textContent = results[i] === 'ok' ? 'Intact' : (results[i] === 'hash' ? 'Hash mismatch' : 'Broken link');
+      if (results[i] !== 'ok' && firstBad < 0) firstBad = i;
+    });
+    if (firstBad >= 0) {
+      msg.className = 'msg bad';
+      msg.textContent = 'Tamper detected at row ' + rows[firstBad].id + ': ' +
+        (results[firstBad] === 'hash' ? 'hash mismatch.' : 'prev_hash mismatch.');
+    } else if (edited()) {
+      msg.className = 'msg warn';
+      msg.textContent = 'Chain intact across ' + rows.length + ' records, and one decision has been changed. The verifier cannot see it: whoever rewrote the hashes also rewrote the proof. A chain in the same database resists casual edits, not someone who can rewrite every row. That is why the design calls for anchoring the chain head somewhere else.';
+    } else {
+      msg.className = 'msg ok';
+      msg.textContent = 'Chain intact across ' + rows.length + ' records.';
+    }
+  }
+
+  function rewriteHashes() {
+    if (!edited()) {
+      msg.className = 'msg';
+      msg.textContent = 'Nothing to hide yet. Edit a decision above first, then try this.';
+      return Promise.resolve();
+    }
+    var prev = 'GENESIS';
+    var p = Promise.resolve();
+    rows.forEach(function (r) {
+      p = p.then(function () {
+        r.prev = prev;
+        return sha256Hex(prev + '|' + r.text).then(function (h) { r.hash = h; prev = h; });
+      });
+    });
+    return p.then(runVerify);
+  }
+
+  function resetDemo() {
+    return buildRows().then(function () { renderRows(); return runVerify(); });
+  }
+
+  btnRewrite.addEventListener('click', rewriteHashes);
+  btnReset.addEventListener('click', resetDemo);
+
+  if (!hasCrypto) {
+    msg.className = 'msg warn';
+    msg.textContent = 'This demo needs Web Crypto, which browsers only enable on https pages. Open the published site over https to try it.';
+    btnRewrite.disabled = true;
+    btnReset.disabled = true;
+  } else {
+    resetDemo();
+  }
+})();
+</script>
+</body>
+</html>
