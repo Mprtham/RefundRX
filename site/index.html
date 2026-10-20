@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RefundRx · An auditable agent for NHS FP57 refunds</title>
+<meta name="description" content="RefundRx is an AI agent that decides NHSBSA FP57 prescription-charge refund claims, with a hash-chained audit log you can verify. Portfolio project by Prathamesh Mishra. Synthetic data only.">
+<meta property="og:title" content="RefundRx: an auditable agent for NHS FP57 refunds">
+<meta property="og:description" content="Every plan, tool call and decision is logged and hash-chained, so you can check how the agent decided.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='11' width='12' height='10' rx='2.5' fill='none' stroke='%231F2326' stroke-width='2'/%3E%3Crect x='18' y='11' width='12' height='10' rx='2.5' fill='none' stroke='%231F2326' stroke-width='2'/%3E%3Cpath d='M14 16h4' stroke='%231F2326' stroke-width='2'/%3E%3C/svg%3E">
+<script>document.documentElement.classList.add('js')</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,500;0,6..72,700;1,6..72,400&display=swap" rel="stylesheet">
+
+<!--
+  LINKS TO CHECK BEFORE PUBLISHING (search for each URL in this file):
+  1. Live demo:  https://refundrx-ui.onrender.com
+  2. GitHub:     https://github.com/Mprtham/RefundRX
+  3. LinkedIn:   https://www.linkedin.com/in/prathameshmishra07
+  A "Design doc" link is deliberately left out until docs/DESIGN.md is committed to the repo.
+-->
+
+<style>
+:root{
+  --bg:#F7F6F3; --surface:#FFFFFF; --ink:#1F2326; --ink-2:#4A4F52; --muted:#6B6964;
+  --line:#E6E4DE; --line-2:#D9D6CE;
+  --ok-bg:#EDF3EC; --ok-fg:#346538; --bad-bg:#FDEBEC; --bad-fg:#9F2F2D; --warn-bg:#FBF3DB; --warn-fg:#956400;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --serif:'Newsreader',Georgia,'Times New Roman',serif;
+  --sans:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Geist Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-x:hidden}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px}
+
+/* ---------- entrance motion ---------- */
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes drop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes drift{to{transform:translateX(-50%)}}
+.rise{animation:rise .85s var(--ease) both;animation-delay:var(--d,0s)}
+
+/* ---------- floating dock ---------- */
+.dock{position:fixed;top:20px;left:0;right:0;z-index:50;display:flex;justify-content:center;pointer-events:none}
+.dock nav{pointer-events:auto;position:relative;display:inline-flex;gap:4px;padding:5px 8px;border-radius:999px;
+  background:rgba(255,255,255,.72);border:1px solid rgba(31,35,38,.09);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 8px 30px rgba(31,35,38,.04);
+  animation:drop .7s var(--ease) both}
+.dock a{position:relative;z-index:1;width:56px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:999px;color:var(--muted);text-decoration:none;transition:color .2s ease}
+.dock a:hover,.dock a[aria-current="true"]{color:var(--ink)}
+.dock svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.dock-pill{position:absolute;top:5px;bottom:5px;left:0;width:0;border-radius:999px;background:rgba(31,35,38,.07);border:1px solid rgba(31,35,38,.05);transition:transform .4s var(--ease),width .4s var(--ease)}
+
+/* ---------- hero ---------- */
+.hero{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:110px 24px 130px;overflow:hidden}
+.chain{position:absolute;left:0;right:0;bottom:96px;height:64px;overflow:hidden;z-index:0;pointer-events:none;
+  -webkit-mask-image:linear-gradient(to right,transparent,#000 16%,#000 84%,transparent);mask-image:linear-gradient(to right,transparent,#000 16%,#000 84%,transparent);
+  animation:fade 1.6s ease both;animation-delay:.9s}
+.chain-track{display:flex;align-items:center;width:max-content;height:100%;animation:drift 90s linear infinite}
+.blk{flex:none;width:132px;height:52px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:0 14px;text-align:left;font-family:var(--mono);color:#B9B6AE}
+.blk span{font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.blk b{font-size:12px;font-weight:400;color:#A29F97}
+.lnk{flex:none;width:44px;height:1px;background:var(--line)}
+.hero-inner{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
+.brand{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:28px}
+.brand-row{display:flex;align-items:center;gap:10px}
+.brand-mark{width:24px;height:24px;fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linecap:round}
+.wordmark{font-size:15px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;padding-left:.28em}
+.byline{font-size:10px;font-weight:500;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);padding-left:.3em}
+h1.display{font-family:var(--serif);text-transform:uppercase;color:var(--ink)}
+.display .l1{display:block;font-weight:300;font-size:clamp(2.6rem,9vw,7rem);line-height:1;letter-spacing:.02em}
+.display .l2{display:block;font-weight:700;font-size:clamp(2.4rem,8.4vw,6.7rem);line-height:.98;letter-spacing:.01em}
+.sub{margin-top:24px;max-width:540px;font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;color:var(--ink-2)}
+.cta{display:inline-block;margin-top:38px;padding:20px 58px;border-radius:50%;border:1px solid rgba(31,35,38,.55);color:var(--ink);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;transition:background-color .2s ease,color .2s ease,transform .15s ease}
+.cta:hover{background:var(--ink);color:#fff}
+.cta:active{transform:scale(.97)}
+.cta-note{margin-top:18px;font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.02em;max-width:34ch}
+.hero-foot{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 40px 26px;animation:fade .9s ease both;animation-delay:.9s}
+.lbl{font-size:10.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);text-decoration:none}
+a.lbl:hover{color:var(--ink)}
+.foot-left{display:flex;gap:22px;flex-wrap:wrap}
+.foot-mid{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:5px}
+.foot-mid b{color:var(--ink);font-weight:600}
+
+/* ---------- content sections ---------- */
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+.sec{padding-top:40px;scroll-margin-top:60px}
+.grid{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px;padding:64px 0;border-top:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.grid h2{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.4vw,2.6rem);line-height:1.12;letter-spacing:-.02em;margin-bottom:22px;max-width:20ch}
+.prose p{max-width:62ch;color:var(--ink-2);margin-bottom:1em}
+.steps{list-style:none;margin-top:10px;border-top:1px solid var(--line)}
+.steps li{display:grid;grid-template-columns:48px 1fr;gap:12px;padding:20px 0;border-bottom:1px solid var(--line)}
+.steps .n{font-family:var(--mono);font-size:13px;color:var(--muted);padding-top:3px}
+.steps h3{font-size:17px;font-weight:600;margin-bottom:4px}
+.steps p{margin:0;color:var(--ink-2);max-width:56ch}
+
+/* reveal on scroll (only when JS is running, so content never stays hidden) */
+html.js .reveal{opacity:0;transform:translateY(12px);transition:opacity .6s var(--ease),transform .6s var(--ease);transition-delay:calc(var(--i,0) * 80ms)}
+html.js .reveal.in{opacity:1;transform:none}
+
+/* ---------- tamper demo ---------- */
+.ledger{margin-top:28px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.lhead,.lrow{display:grid;grid-template-columns:64px 1fr 92px 92px 132px;gap:16px;align-items:center;padding:14px 20px}
+.lhead{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+.lrow+.lrow{border-top:1px solid var(--line)}
+.lrow input{width:100%;font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.lrow input:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.hx{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.pill{display:inline-block;font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:999px;transition:background-color .25s ease,color .25s ease}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.btn{font:inherit;font-size:14px;padding:10px 18px;border-radius:6px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;transition:background-color .2s ease,transform .15s ease}
+.btn:hover{background:#333}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:rgba(31,35,38,.06)}
+.msg{margin-top:16px;font-family:var(--mono);font-size:13px;line-height:1.55;color:var(--ink-2);min-height:4.6em;max-width:72ch}
+.msg.ok{color:var(--ok-fg)} .msg.bad{color:var(--bad-fg)} .msg.warn{color:var(--warn-fg)}
+.fineprint{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:62ch}
+
+/* ---------- table ---------- */
+.tbl-wrap{overflow-x:auto;margin-top:8px}
+.tbl{width:100%;border-collapse:collapse;font-size:15px;min-width:560px}
+.tbl th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;font-weight:500;padding:10px 14px 10px 0;border-bottom:1px solid var(--line)}
+.tbl td{padding:14px 14px 14px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+.tbl td.num{font-family:var(--mono);font-size:13px;color:var(--muted);width:44px}
+.tbl td.name{color:var(--ink);font-weight:500;width:25%}
+
+/* ---------- closing ---------- */
+.closing{text-align:center;padding:96px 0 72px;border-top:1px solid var(--line)}
+.closing h2{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.6vw,2.8rem);letter-spacing:-.02em;line-height:1.12}
+.closing .cta{margin-top:30px}
+.closing .cta-note{margin:18px auto 0}
+.site-foot{border-top:1px solid var(--line);padding:28px 0 44px;text-align:center;font-size:13px;color:var(--muted)}
+.site-foot p+p{margin-top:6px}
+.site-foot a{text-decoration:none;border-bottom:1px solid var(--line-2)}
+.site-foot a:hover{color:var(--ink)}
+
+/* ---------- small screens ---------- */
+@media (max-width:820px){
+  .grid{grid-template-columns:minmax(0,1fr);gap:14px;padding:48px 0}
+  .lhead{display:none}
+  .lrow{grid-template-columns:1fr 1fr;gap:10px 16px}
+  .lrow .c-id{order:1}
+  .lrow .c-status{order:2;justify-self:end}
+  .lrow .c-input{order:3;grid-column:1/-1}
+  .lrow .c-prev{order:4}
+  .lrow .c-hash{order:5}
+  .lrow .c-prev::before{content:'prev ';color:var(--muted)}
+  .lrow .c-hash::before{content:'hash ';color:var(--muted)}
+}
+@media (max-width:760px){
+  .hero-foot{padding:0 20px 18px}
+  .foot-mid{display:none}
+  .chain{bottom:84px}
+  .cta{padding:18px 44px}
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html.js .reveal{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- floating dock -->
+<div class="dock">
+  <nav aria-label="Sections">
+    <span class="dock-pill" aria-hidden="true"></span>
+    <a href="#top" aria-label="Home" title="Home"><svg viewBox="0 0 24 24"><path d="M4 11.2 12 4l8 7.2V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg></a>
+    <a href="#story" aria-label="Why I built this" title="Why I built this"><svg viewBox="0 0 24 24"><path d="M7 4h7l4 4v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M14 4v4h4M9 12h6M9 15.5h6"/></svg></a>
+    <a href="#how" aria-label="How it works" title="How it works"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="8" height="6" rx="2"/><rect x="13" y="9" width="8" height="6" rx="2"/><path d="M11 12h2"/></svg></a>
+    <a href="#evidence" aria-label="Evidence" title="Evidence"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="m8.6 12.3 2.4 2.4 4.5-5"/></svg></a>
+  </nav>
+</div>
+
+<main>
+<!-- hero -->
+<header class="hero" id="top">
+  <div class="chain" aria-hidden="true"><div class="chain-track" id="chain-track"></div></div>
+
+  <div class="hero-inner">
+    <div class="brand rise" style="--d:.1s">
+      <div class="brand-row">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="8" width="9" height="8" rx="2.2"/><rect x="13.5" y="8" width="9" height="8" rx="2.2"/><path d="M10.5 12h3"/></svg>
+        <span class="wordmark">RefundRx</span>
+      </div>
+      <span class="byline">A project by Prathamesh Mishra</span>
+    </div>
+
+    <h1 class="display rise" style="--d:.24s"><span class="l1">Auditable</span><span class="l2">by design</span></h1>
+
+    <p class="sub rise" style="--d:.42s">An AI agent that decides NHS prescription-charge refund claims, and a hash-chained record of exactly how it decided.</p>
+
+    <a class="cta rise" style="--d:.58s" href="https://refundrx-ui.onrender.com" target="_blank" rel="noopener noreferrer">Run the agent</a>
+    <p class="cta-note rise" style="--d:.7s">Runs on a free host. The first load can take up to a minute to wake.</p>
+  </div>
+
+  <div class="hero-foot">
+    <div class="foot-left">
+      <a class="lbl" href="https://github.com/Mprtham/RefundRX" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a class="lbl" href="https://www.linkedin.com/in/prathameshmishra07" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    </div>
+    <div class="foot-mid lbl"><b>Scroll</b><span>to read the story</span></div>
+    <span class="lbl">Synthetic data only</span>
+  </div>
+</header>
+
+<!-- story -->
+<section class="sec" id="story">
+  <div class="wrap">
+    <div class="grid">
+      <div class="eyebrow reveal">Why I built this</div>
+      <div class="prose reveal">
+        <h2>I wanted to build an agent that shows its working.</h2>
+        <p>I work in pharmaceutical technology in the UK. Most AI demos I see are chatbots that sound sure of themselves and cannot say how they got to an answer. In a regulated setting that is the whole problem, so I built the opposite: a small agent whose every step is written down and can be checked afterwards.</p>
+        <p>RefundRx is a portfolio project, not a product. It runs on synthetic data, and it is built to production patterns: versioned policy, tested scenarios, and an audit trail you can verify.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="eyebrow reveal">The problem I saw</div>
+      <div class="prose reveal">
+        <h2>Pharmacies do not refund medicines. One refund does exist.</h2>
+        <p>Once a medicine has been dispensed in the UK it cannot go back on the shelf, so there is no general pharmacy refund. The refund that does exist is the NHSBSA prescription-charge refund, claimed on form FP57, for people who paid a charge they were exempt from.</p>
+        <p>Each claim turns on hard rules: an FP57 receipt issued at the point of payment, a claim made within three months less a day, a valid exemption category, and one refund per form. A model that guesses is the wrong tool. A model that has to show its plan and its checks is a better one.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="eyebrow reveal">What it does</div>
+      <div class="prose">
+        <h2 class="reveal">A planner, a gatherer and a decision-maker.</h2>
+        <ol class="steps">
+          <li class="reveal" style="--i:0"><span class="n">01</span><div><h3>Planner</h3><p>A language model writes an ordered plan, but it can only choose from six named checks. A plan that leaves out the receipt check is recorded as a weak plan, not quietly corrected.</p></div></li>
+          <li class="reveal" style="--i:1"><span class="n">02</span><div><h3>Gather</h3><p>Runs each step in the plan and writes every tool call, its arguments and its result to a trace. Retrieving the relevant policy text is one of those logged steps.</p></div></li>
+          <li class="reveal" style="--i:2"><span class="n">03</span><div><h3>Decision</h3><p>Applies the policy rules stored in the database and enforces the receipt rule whatever the plan said. It writes a hash-chained audit row, and on approval records the claim in the same transaction.</p></div></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- how it bridges the gap + tamper demo -->
+<section class="sec" id="how">
+  <div class="wrap">
+    <div class="grid">
+      <div class="eyebrow reveal">How I bridged the gap</div>
+      <div class="prose">
+        <h2 class="reveal">Policy lives in the database, and the log can be checked.</h2>
+        <p class="reveal">The rules are rows in Postgres, not sentences in a prompt, so they can be versioned and tested. Each decision is stored with its plan, its trace and the hash of the row before it. A verifier walks the chain and recomputes every hash.</p>
+        <p class="reveal">Try it. Change a decision below and the verifier notices. Then see what someone with database access could do about that.</p>
+
+        <div class="ledger reveal" role="group" aria-label="Tamper-evidence demo">
+          <div class="lhead"><span>Row</span><span>Decision (editable)</span><span>prev_hash</span><span>hash</span><span>Status</span></div>
+          <div id="ledger-body"></div>
+        </div>
+        <div class="actions reveal">
+          <button class="btn ghost" id="btn-rewrite" type="button">Rewrite the hashes (attacker with DB access)</button>
+          <button class="btn ghost" id="btn-reset" type="button">Reset</button>
+        </div>
+        <p class="msg" id="ledger-msg" role="status" aria-live="polite">Loading the demo...</p>
+        <noscript><p class="fineprint">This demo needs JavaScript.</p></noscript>
+        <p class="fineprint">Simplified: the real audit rows hash the plan and the trace as well as the decision.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- evidence + limits -->
+<section class="sec" id="evidence">
+  <div class="wrap">
+    <div class="grid">
+      <div class="eyebrow reveal">Evidence</div>
+      <div class="prose">
+        <h2 class="reveal">Ten scenarios, each with an expected outcome.</h2>
+        <p class="reveal">Every scenario has an expected decision and an expected tool trace. The suite runs in CI on SQLite and Postgres with an offline planner. Scoring by a language-model judge runs separately, and I will publish those results once I have a run I can stand behind.</p>
+        <div class="tbl-wrap reveal">
+          <table class="tbl">
+            <thead><tr><th>#</th><th>Scenario</th><th>What it tests</th><th>Expected</th></tr></thead>
+            <tbody>
+              <tr><td class="num">01</td><td class="name">Eligible claim</td><td>HC2 exemption, receipt present, inside the window</td><td><span class="pill ok">Approved</span></td></tr>
+              <tr><td class="num">02</td><td class="name">No FP57 receipt</td><td>The hard gate: rejected whatever else is true</td><td><span class="pill bad">Rejected</span></td></tr>
+              <tr><td class="num">03</td><td class="name">Outside the window</td><td>Claim made 95 days after payment</td><td><span class="pill bad">Rejected</span></td></tr>
+              <tr><td class="num">04</td><td class="name">Wrong exemption</td><td>A category with no active policy rule</td><td><span class="pill bad">Rejected</span></td></tr>
+              <tr><td class="num">05</td><td class="name">Duplicate claim</td><td>Form reference already approved</td><td><span class="pill bad">Rejected</span></td></tr>
+              <tr><td class="num">06</td><td class="name">Information only</td><td>A question, not a claim</td><td><span class="pill warn">No claim made</span></td></tr>
+              <tr><td class="num">07</td><td class="name">Missing patient ID</td><td>Stopped at the API boundary, before any model call</td><td><span class="pill warn">HTTP 422</span></td></tr>
+              <tr><td class="num">08</td><td class="name">Unknown patient</td><td>Well-formed ID that is not on file</td><td><span class="pill bad">Rejected</span></td></tr>
+              <tr><td class="num">09</td><td class="name">Unpaid charge</td><td>Payment could not be verified</td><td><span class="pill bad">Rejected</span></td></tr>
+              <tr><td class="num">10</td><td class="name">Malformed argument</td><td>The model passes a string where a date is required; validation catches it before the tool runs</td><td><span class="pill bad">Rejected</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="eyebrow reveal">Limits</div>
+      <div class="prose reveal">
+        <h2>What this is not.</h2>
+        <p>It is a demonstration on synthetic data. It is not validated for clinical, regulatory or GxP use, and it is not insured for real decisions. It covers exemption-based refunds only: prepayment-certificate and HC3 refunds are out of scope.</p>
+        <p>A hash chain stored in the same database resists casual edits, not someone who can rewrite every row. Real tamper-evidence would need the chain head anchored somewhere else, which a free-tier demo does not do.</p>
+      </div>
+    </div>
+
+    <div class="closing">
+      <h2 class="reveal">See it decide a claim.</h2>
+      <a class="cta reveal" href="https://refundrx-ui.onrender.com" target="_blank" rel="noopener noreferrer">Run the agent</a>
+      <p class="cta-note reveal">Runs on a free host. The first load can take up to a minute to wake.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>Built by <strong>Prathamesh Mishra</strong> | FDE Portfolio Project</p>
+    <p>Demonstration system using synthetic data only. Not validated for clinical, regulatory or GxP use. No real patient data is processed.</p>
+    <p><a href="https://github.com/Mprtham/RefundRX" target="_blank" rel="noopener noreferrer">GitHub</a> &nbsp;·&nbsp; <a href="https://www.linkedin.com/in/prathameshmishra07" target="_blank" rel="noopener noreferrer">LinkedIn</a></p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- hashing (Web Crypto, SHA-256) ---------- */
+  var hasCrypto = !!(window.crypto && window.crypto.subtle);
+  var enc = new TextEncoder();
+  function sha256Hex(s) {
+    return window.crypto.subtle.digest('SHA-256', enc.encode(s)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+  function short(h) { return h.slice(0, 8); }
+
+  /* ---------- dock: sliding highlight + scroll spy ---------- */
+  var dockLinks = Array.prototype.slice.call(document.querySelectorAll('.dock a'));
+  var pill = document.querySelector('.dock-pill');
+  var current = 'top';
+  function setActive(id) {
+    current = id;
+    dockLinks.forEach(function (a) {
+      var on = a.getAttribute('href') === '#' + id;
+      if (on) {
+        a.setAttribute('aria-current', 'true');
+        pill.style.width = a.offsetWidth + 'px';
+        pill.style.transform = 'translateX(' + a.offsetLeft + 'px)';
+      } else {
+        a.removeAttribute('aria-current');
+      }
+    });
+  }
+  setActive('top');
+  window.addEventListener('resize', function () { setActive(current); });
+  if ('IntersectionObserver' in window) {
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) setActive(e.target.id); });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    ['top', 'story', 'how', 'evidence'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) spy.observe(el);
+    });
+  }
+
+  /* ---------- reveal on scroll ---------- */
+  var reveals = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    var rio = new IntersectionObserver(function (entries, obs) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    reveals.forEach(function (el) { rio.observe(el); });
+  } else {
+    reveals.forEach(function (el) { el.classList.add('in'); });
+  }
+
+  /* ---------- hero: a drifting strip of real SHA-256 chain links ---------- */
+  function fakeHex(i) { return ((i * 2654435761) >>> 0).toString(16).padStart(8, '0'); }
+  function paintChain(cells) {
+    var html = cells.map(function (c) {
+      return '<div class="blk"><span>row ' + String(c.i).padStart(4, '0') + '</span><b>' + c.h + '</b></div><i class="lnk"></i>';
+    }).join('');
+    document.getElementById('chain-track').innerHTML = html + html;
+  }
+  function buildHeroChain() {
+    var cells = [], i;
+    if (!hasCrypto) {
+      for (i = 1; i <= 12; i++) cells.push({ i: i, h: fakeHex(i) });
+      paintChain(cells);
+      return;
+    }
+    var chain = Promise.resolve('GENESIS');
+    for (i = 1; i <= 12; i++) {
+      (function (n) {
+        chain = chain.then(function (prev) {
+          return sha256Hex(prev + '|row ' + n).then(function (h) { cells.push({ i: n, h: short(h) }); return h; });
+        });
+      })(i);
+    }
+    chain.then(function () { paintChain(cells); });
+  }
+
+  /* ---------- tamper-evidence demo ---------- */
+  var INITIAL = [
+    { id: '0417', text: 'APPROVED: HC2, receipt present, in window' },
+    { id: '0418', text: 'REJECTED: no FP57 receipt' },
+    { id: '0419', text: 'REJECTED: outside the 3-month window' }
+  ];
+  var body = document.getElementById('ledger-body');
+  var msg = document.getElementById('ledger-msg');
+  var btnRewrite = document.getElementById('btn-rewrite');
+  var btnReset = document.getElementById('btn-reset');
+  var rows = [];
+  var verifyToken = 0;
+
+  function edited() {
+    return rows.some(function (r, i) { return r.text !== INITIAL[i].text; });
+  }
+
+  function buildRows() {
+    var prev = 'GENESIS';
+    var p = Promise.resolve();
+    rows = [];
+    INITIAL.forEach(function (r) {
+      p = p.then(function () {
+        return sha256Hex(prev + '|' + r.text).then(function (h) {
+          rows.push({ id: r.id, text: r.text, prev: prev, hash: h });
+          prev = h;
+        });
+      });
+    });
+    return p;
+  }
+
+  function renderRows() {
+    body.innerHTML = '';
+    rows.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'lrow';
+      row.innerHTML =
+        '<div class="c-id hx">' + r.id + '</div>' +
+        '<div class="c-input"><input type="text" spellcheck="false" aria-label="Decision text for row ' + r.id + '"></div>' +
+        '<div class="c-prev hx" data-k="prev"></div>' +
+        '<div class="c-hash hx" data-k="hash"></div>' +
+        '<div class="c-status"><span class="pill"></span></div>';
+      var input = row.querySelector('input');
+      input.value = r.text;
+      input.addEventListener('input', function () { r.text = input.value; runVerify(); });
+      body.appendChild(row);
+    });
+  }
+
+  function runVerify() {
+    var token = ++verifyToken;
+    var expectedPrev = 'GENESIS';
+    var results = [];
+    var p = Promise.resolve();
+    rows.forEach(function (r, i) {
+      p = p.then(function () {
+        if (r.prev !== expectedPrev) { results[i] = 'link'; expectedPrev = r.hash; return; }
+        return sha256Hex(r.prev + '|' + r.text).then(function (h) {
+          results[i] = (h === r.hash) ? 'ok' : 'hash';
+          expectedPrev = r.hash;
+        });
+      });
+    });
+    return p.then(function () { if (token === verifyToken) paint(results); });
+  }
+
+  function paint(results) {
+    var firstBad = -1;
+    rows.forEach(function (r, i) {
+      var el = body.children[i];
+      el.querySelector('[data-k="prev"]').textContent = r.prev === 'GENESIS' ? 'GENESIS' : short(r.prev);
+      el.querySelector('[data-k="hash"]').textContent = short(r.hash);
+      var pl = el.querySelector('.pill');
+      pl.className = 'pill ' + (results[i] === 'ok' ? 'ok' : 'bad');
+      pl.textContent = results[i] === 'ok' ? 'Intact' : (results[i] === 'hash' ? 'Hash mismatch' : 'Broken link');
+      if (results[i] !== 'ok' && firstBad < 0) firstBad = i;
+    });
+    if (firstBad >= 0) {
+      msg.className = 'msg bad';
+      msg.textContent = 'Tamper detected at row ' + rows[firstBad].id + ': ' +
+        (results[firstBad] === 'hash' ? 'hash mismatch.' : 'prev_hash mismatch.');
+    } else if (edited()) {
+      msg.className = 'msg warn';
+      msg.textContent = 'Chain intact across ' + rows.length + ' records, and one decision has been changed. The verifier cannot see it: whoever rewrote the hashes also rewrote the proof. A chain in the same database resists casual edits, not someone who can rewrite every row. That is why the design calls for anchoring the chain head somewhere else.';
+    } else {
+      msg.className = 'msg ok';
+      msg.textContent = 'Chain intact across ' + rows.length + ' records.';
+    }
+  }
+
+  function rewriteHashes() {
+    if (!edited()) {
+      msg.className = 'msg';
+      msg.textContent = 'Nothing to hide yet. Edit a decision above first, then try this.';
+      return Promise.resolve();
+    }
+    var prev = 'GENESIS';
+    var p = Promise.resolve();
+    rows.forEach(function (r) {
+      p = p.then(function () {
+        r.prev = prev;
+        return sha256Hex(prev + '|' + r.text).then(function (h) { r.hash = h; prev = h; });
+      });
+    });
+    return p.then(runVerify);
+  }
+
+  function resetDemo() {
+    return buildRows().then(function () { renderRows(); return runVerify(); });
+  }
+
+  btnRewrite.addEventListener('click', rewriteHashes);
+  btnReset.addEventListener('click', resetDemo);
+
+  if (!hasCrypto) {
+    msg.className = 'msg warn';
+    msg.textContent = 'This demo needs Web Crypto, which browsers only enable on https pages. Open the published site over https to try it.';
+    btnRewrite.disabled = true;
+    btnReset.disabled = true;
+  } else {
+    resetDemo();
+  }
+  buildHeroChain();
+})();
+</script>
+</body>
+</html>
