@@ -18,7 +18,7 @@ API_AUTH = (
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 GITHUB_URL = "https://github.com/Mprtham/RefundRX"
 DESIGN_DOC_URL = f"{GITHUB_URL}#architecture"
-HERO = (Path(__file__).parent / "hero.html").read_text(encoding="utf-8")
+HERO = (Path(__file__).parent / "hero3d.html").read_text(encoding="utf-8")
 TAMPER_DEMO = (Path(__file__).parent / "tamper_demo.html").read_text(encoding="utf-8")
 
 st.set_page_config(page_title="RefundRx", page_icon=":material/receipt_long:", layout="wide")
@@ -91,7 +91,7 @@ def wake_api() -> None:
 
 gate()
 
-# --- hero (copied from site/index.html) and links ---------------------------
+# --- 3D hero (ui/hero3d.html) and links ------------------------------------
 components.html(HERO, height=720)
 st.html(f"""
 <div class='rr-linkbar'>

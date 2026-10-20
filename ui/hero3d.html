@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RefundRx 3D hero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,700;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F7F6F3;--ink:#1F2326;--ink-2:#4A4F52;--muted:#6B6964;--line:#E6E4DE;--ease:cubic-bezier(.16,1,.3,1);
+  --serif:'Newsreader',Georgia,'Times New Roman',serif;--sans:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+#stage{position:relative;width:100%;height:100vh;min-height:520px;overflow:hidden}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;padding:34px 20px 0;pointer-events:none}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.rise{animation:rise .85s var(--ease) both;animation-delay:var(--d,0s)}
+.brand{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px}
+.brand-row{display:flex;align-items:center;gap:10px}
+.mark{width:22px;height:22px;fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linecap:round}
+.wordmark{font-size:14px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;padding-left:.28em}
+.byline{font-size:9.5px;font-weight:500;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);padding-left:.3em}
+h1{font-family:var(--serif);text-transform:uppercase}
+h1 .l1{display:block;font-weight:300;font-size:clamp(2.1rem,6.6vw,4.9rem);line-height:1;letter-spacing:.02em}
+h1 .l2{display:block;font-weight:700;font-size:clamp(2rem,6.2vw,4.7rem);line-height:.98;letter-spacing:.01em}
+.sub{margin-top:14px;max-width:520px;font-family:var(--serif);font-style:italic;font-size:clamp(15px,2vw,18px);line-height:1.45;color:var(--ink-2)}
+.cta{pointer-events:auto;cursor:pointer;display:inline-block;margin-top:22px;padding:17px 50px;border-radius:50%;border:1px solid rgba(31,35,38,.55);background:rgba(247,246,243,.6);color:var(--ink);font:500 11.5px var(--sans);letter-spacing:.22em;text-transform:uppercase;text-decoration:none;transition:background-color .2s ease,color .2s ease,transform .15s ease}
+.cta:hover{background:var(--ink);color:#fff}
+.cta:active{transform:scale(.97)}
+.note{margin-top:12px;font:400 11px var(--mono);color:var(--muted)}
+.hud{position:absolute;left:0;right:0;bottom:16px;text-align:center;pointer-events:none;padding:0 16px}
+.hud .status{font:500 12.5px var(--mono);letter-spacing:.02em;color:var(--ink-2);transition:color .25s ease;min-height:1.4em}
+.hud .status.bad{color:#9F2F2D}
+.hud .status.ok{color:#346538}
+.hud .hint{margin-top:4px;font:400 10.5px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.nogl .hud{display:none}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c" aria-hidden="true"></canvas>
+  <div class="overlay">
+    <div class="brand rise" style="--d:.1s">
+      <div class="brand-row">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="8" width="9" height="8" rx="2.2"/><rect x="13.5" y="8" width="9" height="8" rx="2.2"/><path d="M10.5 12h3"/></svg>
+        <span class="wordmark">RefundRx</span>
+      </div>
+      <span class="byline">A project by Prathamesh Mishra</span>
+    </div>
+    <h1 class="rise" style="--d:.24s"><span class="l1">Auditable</span><span class="l2">by design</span></h1>
+    <p class="sub rise" style="--d:.4s">An AI agent that decides NHS prescription-charge refund claims, and a hash-chained record of exactly how it decided.</p>
+    <a class="cta rise" style="--d:.55s" id="cta" href="#">Run the agent</a>
+    <p class="note rise" style="--d:.65s">Runs on a free host. The first load can take up to a minute to wake.</p>
+  </div>
+  <div class="hud" aria-live="polite">
+    <div class="status" id="status">Drag to look around. Chain intact across 12 records.</div>
+    <div class="hint" id="hint">Click any block to tamper with it</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var stage = document.getElementById('stage');
+  var canvas = document.getElementById('c');
+  var statusEl = document.getElementById('status');
+  var hintEl = document.getElementById('hint');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* the button scrolls the parent page to the claim form, if the host allows it */
+  document.getElementById('cta').addEventListener('click', function (e) {
+    e.preventDefault();
+    try {
+      var d = window.parent.document;
+      var t = d.getElementById('claim-form') || d.querySelector('[data-testid="stForm"]');
+      if (t) { t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); return; }
+      window.parent.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+    } catch (err) { /* sandboxed: do nothing */ }
+  });
+
+  if (!window.THREE) { stage.classList.add('nogl'); return; }
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  } catch (err) { stage.classList.add('nogl'); return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  var N = 12, R = 6.4;
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.6);
+  sun.position.set(4, 9, 7);
+  scene.add(sun);
+
+  var tilt = new THREE.Group();
+  var ring = new THREE.Group();
+  tilt.add(ring);
+  scene.add(tilt);
+
+  /* ---------- hashing ---------- */
+  var hasCrypto = !!(window.crypto && window.crypto.subtle);
+  var enc = new TextEncoder();
+  function sha(s) {
+    if (!hasCrypto) {
+      var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+      return Promise.resolve(('00000000' + h.toString(16)).slice(-8).repeat(8));
+    }
+    return crypto.subtle.digest('SHA-256', enc.encode(s)).then(function (b) {
+      return Array.prototype.map.call(new Uint8Array(b), function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+    });
+  }
+
+  /* ---------- blocks ---------- */
+  var geo = new THREE.BoxGeometry(2.5, 1.2, 0.5);
+  var edgeGeo = new THREE.EdgesGeometry(geo);
+  var blocks = [], hashes = [], tampered = -1;
+  var COLORS = { ok: '#1F2326', dim: '#8C8A83', bad: '#9F2F2D' };
+
+  function drawLabel(b) {
+    var c = b.ctx, w = 512, h = 214;
+    c.clearRect(0, 0, w, h);
+    var bad = b.state === 'bad';
+    c.fillStyle = bad ? '#FDEBEC' : '#FFFFFF';
+    c.fillRect(0, 0, w, h);
+    c.textBaseline = 'alphabetic';
+    c.fillStyle = bad ? COLORS.bad : '#8C8A83';
+    c.font = '500 26px ui-monospace, Menlo, Consolas, monospace';
+    c.fillText('ROW ' + String(b.index + 1).padStart(4, '0'), 34, 62);
+    c.fillStyle = bad ? COLORS.bad : COLORS.ok;
+    c.font = '500 52px ui-monospace, Menlo, Consolas, monospace';
+    c.fillText((b.hash || '........').slice(0, 8), 34, 130);
+    c.fillStyle = bad ? COLORS.bad : '#8C8A83';
+    c.font = '500 22px ui-monospace, Menlo, Consolas, monospace';
+    c.fillText(bad ? 'HASH MISMATCH' : (b.index === 0 ? 'PREV GENESIS' : 'PREV ' + (b.prev || '').slice(0, 8)), 34, 180);
+    b.tex.needsUpdate = true;
+  }
+
+  function makeBlock(i) {
+    var theta = (i / N) * Math.PI * 2;
+    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(Math.cos(theta) * R, 0, Math.sin(theta) * R);
+    mesh.rotation.y = Math.PI / 2 - theta;
+    mesh.add(new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x1F2326, transparent: true, opacity: 0.55 })));
+    var cv = document.createElement('canvas'); cv.width = 512; cv.height = 214;
+    var tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = 4;
+    var face = new THREE.PlaneGeometry(2.38, 0.995);
+    var pm = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+    var front = new THREE.Mesh(face, pm); front.position.z = 0.256;
+    var back = new THREE.Mesh(face, pm); back.position.z = -0.256; back.rotation.y = Math.PI;
+    mesh.add(front); mesh.add(back);
+    var b = { index: i, mesh: mesh, mat: mat, ctx: cv.getContext('2d'), tex: tex, hash: '', prev: '', state: 'ok', scale: 1, theta: theta };
+    mesh.userData.block = b;
+    ring.add(mesh);
+    blocks.push(b);
+    drawLabel(b);
+  }
+  for (var i = 0; i < N; i++) makeBlock(i);
+
+  /* links between blocks (open ring: row 1 starts from GENESIS) */
+  var linkMats = [];
+  for (var j = 0; j < N - 1; j++) {
+    var a = blocks[j], b2 = blocks[j + 1];
+    var ta = new THREE.Vector3(-Math.sin(a.theta), 0, Math.cos(a.theta));
+    var tb = new THREE.Vector3(-Math.sin(b2.theta), 0, Math.cos(b2.theta));
+    var p1 = a.mesh.position.clone().addScaledVector(ta, 1.3);
+    var p2 = b2.mesh.position.clone().addScaledVector(tb, -1.3);
+    var lm = new THREE.LineBasicMaterial({ color: 0x8C8A83 });
+    ring.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1, p2]), lm));
+    linkMats.push(lm);
+  }
+
+  function buildChain() {
+    var prev = 'GENESIS', p = Promise.resolve();
+    blocks.forEach(function (b, i) {
+      p = p.then(function () {
+        return sha(prev + '|decision ' + (i + 1)).then(function (h) {
+          b.prev = prev === 'GENESIS' ? '' : prev; b.hash = h; hashes[i] = h; prev = h; drawLabel(b);
+        });
+      });
+    });
+    return p;
+  }
+  buildChain();
+
+  /* ---------- tamper interaction ---------- */
+  function setStatus(text, cls) { statusEl.textContent = text; statusEl.className = 'status' + (cls ? ' ' + cls : ''); }
+  function reset() {
+    tampered = -1;
+    blocks.forEach(function (b) { b.state = 'ok'; b.hash = hashes[b.index]; drawLabel(b); });
+    linkMats.forEach(function (m) { m.color.set(0x8C8A83); });
+    setStatus('Chain intact across ' + N + ' records.', 'ok');
+    hintEl.textContent = 'Click any block to tamper with it';
+  }
+  function tamper(b) {
+    var prevHash = b.index === 0 ? 'GENESIS' : hashes[b.index - 1];
+    sha(prevHash + '|decision ' + (b.index + 1) + ' (edited)').then(function (h) {
+      tampered = b.index; b.state = 'bad'; b.hash = h; drawLabel(b);
+      linkMats.forEach(function (m, k) { m.color.set(k >= b.index - 1 ? 0x9F2F2D : 0x8C8A83); });
+      setStatus('Tamper detected at row ' + String(b.index + 1).padStart(4, '0') + ': hash mismatch.', 'bad');
+      hintEl.textContent = 'Click again to reset';
+    });
+  }
+
+  /* ---------- input ---------- */
+  var ray = new THREE.Raycaster(), mouse = new THREE.Vector2(9, 9);
+  var hover = null, tx = 0, ty = 0, drag = false, dragX = 0, spin = 0, downAt = null;
+  function ndc(e) {
+    var r = canvas.getBoundingClientRect();
+    mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    return { x: (e.clientX - r.left) / r.width - 0.5, y: (e.clientY - r.top) / r.height - 0.5 };
+  }
+  stage.addEventListener('pointermove', function (e) {
+    var n = ndc(e); tx = n.x; ty = n.y;
+    if (drag) { spin += (e.clientX - dragX) * 0.006; dragX = e.clientX; }
+  });
+  stage.addEventListener('pointerleave', function () { tx = 0; ty = 0; mouse.set(9, 9); drag = false; });
+  stage.addEventListener('pointerdown', function (e) { if (e.target.id === 'cta') return; drag = true; dragX = e.clientX; downAt = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('pointerup', function (e) {
+    if (!drag) return; drag = false;
+    if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 6 && hover) {
+      if (tampered === hover.index) reset(); else if (tampered >= 0) { reset(); tamper(hover); } else tamper(hover);
+    }
+  });
+
+  /* ---------- layout + loop ---------- */
+  function size() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    var narrow = w < 640;
+    camera.position.set(0, narrow ? 6.5 : 4.2, narrow ? 29 : 27);
+    camera.lookAt(0, narrow ? -1.2 : 0.4, 0);
+    tilt.position.y = narrow ? -5.2 : -3.4;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', size);
+  size();
+
+  var clock = new THREE.Clock(), born = 0, visible = true;
+  document.addEventListener('visibilitychange', function () { visible = !document.hidden; });
+  var tick = function () {
+    requestAnimationFrame(tick);
+    if (!visible) return;
+    var dt = Math.min(clock.getDelta(), 0.05);
+    born = Math.min(born + dt / 1.4, 1);
+    var ease = 1 - Math.pow(1 - born, 4);
+    if (!reduce) spin += dt * 0.12;
+    ring.rotation.y += (spin - ring.rotation.y) * 0.08;
+    tilt.rotation.x += ((ty * 0.18) - tilt.rotation.x) * 0.06;
+    tilt.rotation.z += ((-tx * 0.10) - tilt.rotation.z) * 0.06;
+    var s = 0.72 + 0.28 * ease; tilt.scale.set(s, s, s);
+
+    ray.setFromCamera(mouse, camera);
+    var hits = ray.intersectObjects(blocks.map(function (b) { return b.mesh; }), false);
+    hover = hits.length ? hits[0].object.userData.block : null;
+    canvas.style.cursor = hover ? 'pointer' : (drag ? 'grabbing' : 'grab');
+    blocks.forEach(function (b) {
+      var target = (b === hover) ? 1.1 : 1;
+      b.scale += (target - b.scale) * 0.15;
+      b.mesh.scale.setScalar(b.scale);
+      b.mat.color.set(b.state === 'bad' ? 0xFDEBEC : 0xFFFFFF);
+    });
+    renderer.render(scene, camera);
+  };
+  tick();
+})();
+</script>
+</body>
+</html>
