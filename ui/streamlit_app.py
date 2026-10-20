@@ -20,6 +20,7 @@ GITHUB_URL = "https://github.com/Mprtham/RefundRX"
 DESIGN_DOC_URL = f"{GITHUB_URL}#architecture"
 HERO = (Path(__file__).parent / "hero3d.html").read_text(encoding="utf-8")
 TAMPER_DEMO = (Path(__file__).parent / "tamper_demo.html").read_text(encoding="utf-8")
+MOTION = (Path(__file__).parent / "motion.html").read_text(encoding="utf-8")
 
 st.set_page_config(page_title="RefundRx", page_icon=":material/receipt_long:", layout="wide")
 theme.apply()
@@ -123,9 +124,9 @@ st.html("""
     <div class='rr-prose'>
       <h2>A planner, a gatherer and a decision-maker.</h2>
       <ol class='rr-steps'>
-        <li><span class='rr-n'>01</span><div><h3>Planner</h3><p>A language model writes an ordered plan, but it can only choose from six named checks. A plan that leaves out the receipt check is recorded as a weak plan, not quietly corrected.</p></div></li>
-        <li><span class='rr-n'>02</span><div><h3>Gather</h3><p>Runs each step in the plan and writes every tool call, its arguments and its result to a trace. Retrieving the relevant policy text is one of those logged steps.</p></div></li>
-        <li><span class='rr-n'>03</span><div><h3>Decision</h3><p>Applies the policy rules stored in the database and enforces the receipt rule whatever the plan said. It writes a hash-chained audit row, and on approval records the claim in the same transaction.</p></div></li>
+        <li class='rr-step-card'><span class='rr-n'>01</span><h3>Planner</h3><p>A language model writes an ordered plan, but it can only choose from six named checks. A plan that leaves out the receipt check is recorded as a weak plan, not quietly corrected.</p></li>
+        <li class='rr-step-card'><span class='rr-n'>02</span><h3>Gather</h3><p>Runs each step in the plan and writes every tool call, its arguments and its result to a trace. Retrieving the relevant policy text is one of those logged steps.</p></li>
+        <li class='rr-step-card'><span class='rr-n'>03</span><h3>Decision</h3><p>Applies the policy rules stored in the database and enforces the receipt rule whatever the plan said. It writes a hash-chained audit row, and on approval records the claim in the same transaction.</p></li>
       </ol>
     </div>
   </div>
@@ -216,7 +217,9 @@ def render_result(status: int, body: dict) -> str:
                 f"<div class='rr-notice'><b>Rejected at the API boundary.</b>The Planner never ran, so there is "
                 f"no plan and no trace.{' Invalid: ' + escape(fields) + '.' if fields else ''}</div></div>")
 
-    refund = f"<span class='rr-refund'>£{escape(body['refund_amount'])}</span>" if body.get("refund_amount") else ""
+    # data-amount lets ui/motion.html count the refund up from zero; the text is already final without JS.
+    refund = (f"<span class='rr-refund' data-prefix='£' data-amount='{escape(body['refund_amount'])}'>"
+              f"£{escape(body['refund_amount'])}</span>") if body.get("refund_amount") else ""
     reasons = "".join(f"<li>{escape(r)}</li>" for r in body.get("reasons") or [])
     out = [
         "<div class='rr-panel'>",
@@ -330,6 +333,9 @@ with verify_col:
             notice("Verification failed.", str(e))
     else:
         st.html("<div class='rr-verify rr-muted'>integrity-checked, not externally anchored</div>")
+
+# Zero-height loader: injects the scroll reveal, card tilt, count-up and progress bar into the page.
+components.html(MOTION, height=0)
 
 st.html("<div class='rr-footer'>Built by <b>Prathamesh Mishra</b> | FDE Portfolio Project"
         "<p>Demonstration system using synthetic data only. Not validated for clinical, regulatory or GxP use. "

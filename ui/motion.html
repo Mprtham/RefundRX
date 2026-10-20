@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<!-- rr-motion-loader: zero-height component embedded by ui/streamlit_app.py.
+     Streamlit re-renders its DOM on every interaction, so this frame injects one
+     script into the parent page instead of animating from inside the iframe.
+     The script is guarded by window.__rrMotion (runs once per page load) and
+     re-applies its effects from a MutationObserver after each rerun.
+     All styling for the classes it adds lives in ui/theme.py. -->
+</head>
+<body>
+<script>
+(function () {
+  'use strict';
+
+  function motion() {
+    var W = window, D = document;
+    if (W.__rrMotion) return;
+    W.__rrMotion = true;
+
+    var reduceQ = W.matchMedia('(prefers-reduced-motion: reduce)');
+    var fineQ = W.matchMedia('(hover: hover) and (pointer: fine)');
+    function reduced() { return reduceQ.matches; }
+    function main() { return D.querySelector('[data-testid="stMain"]'); }
+
+    /* ---------- scroll reveal ---------- */
+    var REVEAL = [
+      '.rr-linkbar', '.rr-story-row', '[data-testid="stForm"]', '.rr-panel', '.rr-empty',
+      '.rr-fineprint', '.rr-h2', '.rr-sub', '.rr-table-wrap', '.rr-verify', '.rr-footer'
+    ].join(',');
+    var observed = new WeakSet();
+    var io = null;
+
+    function finish(el) {
+      setTimeout(function () {
+        el.classList.remove('rr-reveal');
+        el.style.removeProperty('--rr-delay');
+      }, 1200);
+    }
+
+    if ('IntersectionObserver' in W) {
+      io = new IntersectionObserver(function (entries) {
+        var shown = entries.filter(function (e) { return e.isIntersecting; })
+          .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; });
+        shown.forEach(function (e, i) {
+          var el = e.target;
+          el.style.setProperty('--rr-delay', (i * 80) + 'ms');
+          el.classList.add('rr-in');
+          io.unobserve(el);
+          finish(el);
+        });
+      }, { threshold: 0.06, rootMargin: '0px 0px -6% 0px' });
+    }
+
+    function revealTargets(m) {
+      var list = Array.prototype.slice.call(m.querySelectorAll(REVEAL));
+      /* the tamper demo frame's element container */
+      Array.prototype.forEach.call(m.querySelectorAll('iframe[srcdoc*="ledger-body"]'), function (f) {
+        var c = f.closest('[data-testid="stElementContainer"]');
+        if (c) list.push(c);
+      });
+      return list;
+    }
+
+    function scanReveal(m) {
+      if (!io || reduced()) return;
+      revealTargets(m).forEach(function (el) {
+        if (observed.has(el)) return;
+        observed.add(el);
+        el.classList.add('rr-reveal');
+        io.observe(el);
+      });
+      /* Only hide anything once the observer exists and is watching. */
+      if (!D.documentElement.classList.contains('rr-motion')) D.documentElement.classList.add('rr-motion');
+    }
+
+    /* ---------- refund count-up ---------- */
+    var countIO = 'IntersectionObserver' in W ? new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        countIO.unobserve(e.target);
+        countUp(e.target);
+      });
+    }, { threshold: 0.5 }) : null;
+
+    function countUp(el) {
+      var target = parseFloat(el.getAttribute('data-amount'));
+      var prefix = el.getAttribute('data-prefix') || '';
+      if (!isFinite(target)) return;
+      if (reduced()) { el.textContent = prefix + target.toFixed(2); return; }
+      var start = null, dur = 800;
+      el.textContent = prefix + (0).toFixed(2);
+      function step(t) {
+        if (start === null) start = t;
+        var p = Math.min((t - start) / dur, 1);
+        var eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = prefix + (target * eased).toFixed(2);
+        if (p < 1) W.requestAnimationFrame(step);
+      }
+      W.requestAnimationFrame(step);
+    }
+
+    function scanCounts(m) {
+      Array.prototype.forEach.call(m.querySelectorAll('.rr-refund[data-amount]:not([data-rr-counted])'), function (el) {
+        el.setAttribute('data-rr-counted', '1');
+        if (countIO && !reduced()) {
+          /* Runs before the next paint, so the final value never flashes before the count. */
+          el.textContent = (el.getAttribute('data-prefix') || '') + (0).toFixed(2);
+          countIO.observe(el);
+        } else countUp(el);
+      });
+    }
+
+    /* ---------- audit table: new rows slide in ---------- */
+    var seenRows = null;
+    function scanRows(m) {
+      var rows = m.querySelectorAll('.rr-table tbody tr');
+      if (!rows.length) return;
+      var first = seenRows === null;
+      if (first) seenRows = new Set();
+      Array.prototype.forEach.call(rows, function (tr) {
+        var id = tr.cells[0] ? tr.cells[0].textContent.trim() : '';
+        if (!id || seenRows.has(id)) return;
+        seenRows.add(id);
+        if (!first && !reduced() && !tr.classList.contains('rr-row-new')) tr.classList.add('rr-row-new');
+      });
+    }
+
+    /* ---------- "What it does" cards: cursor tilt ---------- */
+    var tilted = null;
+    function untilt(card) {
+      card.classList.remove('rr-tilting');
+      card.style.removeProperty('transform');
+    }
+    D.addEventListener('mousemove', function (e) {
+      var card = e.target.closest && e.target.closest('.rr-step-card');
+      if (tilted && tilted !== card) { untilt(tilted); tilted = null; }
+      if (!card || reduced() || !fineQ.matches) return;
+      var r = card.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - 0.5;
+      var y = (e.clientY - r.top) / r.height - 0.5;
+      card.classList.add('rr-tilting');
+      card.style.transform = 'translateY(-6px) rotateX(' + (-y * 12).toFixed(2) + 'deg) rotateY(' + (x * 12).toFixed(2) + 'deg)';
+      tilted = card;
+    }, { passive: true });
+    D.addEventListener('mouseout', function (e) {
+      if (!e.relatedTarget && tilted) { untilt(tilted); tilted = null; }  /* pointer left the window */
+    });
+
+    /* ---------- reading-progress hairline ---------- */
+    var bar = D.getElementById('rr-progress');
+    if (!bar) {
+      bar = D.createElement('div');
+      bar.id = 'rr-progress';
+      bar.setAttribute('aria-hidden', 'true');
+      D.body.appendChild(bar);
+    }
+    var ticking = false;
+    function progress() {
+      ticking = false;
+      var m = main();
+      if (!m) return;
+      var max = m.scrollHeight - m.clientHeight;
+      bar.style.transform = 'scaleX(' + (max > 0 ? Math.min(m.scrollTop / max, 1) : 0).toFixed(4) + ')';
+    }
+    D.addEventListener('scroll', function () {
+      if (!ticking) { ticking = true; W.requestAnimationFrame(progress); }
+    }, { capture: true, passive: true });
+
+    /* ---------- apply now and after every rerun ---------- */
+    var queued = false;
+    function apply() {
+      queued = false;
+      var m = main();
+      if (!m) return;
+      scanReveal(m);
+      scanCounts(m);
+      scanRows(m);
+      progress();
+    }
+    function queue() { if (!queued) { queued = true; W.requestAnimationFrame(apply); } }
+    new MutationObserver(queue).observe(D.body, { childList: true, subtree: true });
+    apply();
+  }
+
+  try {
+    var P = window.parent;
+    if (!P || P === window || P.__rrMotion) return;
+    var s = P.document.createElement('script');
+    s.textContent = '(' + motion.toString() + ')();';
+    P.document.head.appendChild(s);
+  } catch (err) {
+    /* Parent page not reachable from this frame: the UI stays static and fully visible. */
+  }
+})();
+</script>
+</body>
+</html>
