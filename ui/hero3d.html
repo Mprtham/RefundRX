@@ -36,6 +36,7 @@ h1 .l2{display:block;font-weight:700;font-size:clamp(2rem,6.2vw,4.7rem);line-hei
 .hud .status.ok{color:#346538}
 .hud .hint{margin-top:4px;font:400 10.5px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .nogl .hud{display:none}
+@media (max-width:640px){.hud{bottom:8px;background:var(--bg);padding-top:8px}.hud .status{font-size:11px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -235,9 +236,9 @@ h1 .l2{display:block;font-weight:700;font-size:clamp(2rem,6.2vw,4.7rem);line-hei
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     var narrow = w < 640;
-    camera.position.set(0, narrow ? 6.5 : 4.2, narrow ? 29 : 27);
-    camera.lookAt(0, narrow ? -1.2 : 0.4, 0);
-    tilt.position.y = narrow ? -5.2 : -3.4;
+    camera.position.set(0, narrow ? 7 : 4.2, narrow ? 44 : 27);
+    camera.lookAt(0, narrow ? 0.2 : 0.4, 0);
+    tilt.position.y = narrow ? -3.6 : -3.4;
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', size);
