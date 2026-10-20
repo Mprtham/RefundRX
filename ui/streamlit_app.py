@@ -9,6 +9,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import theme
+import wake
 
 API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 API_AUTH = (
@@ -74,20 +75,17 @@ def gate() -> None:
 
 
 def api(method: str, path: str, **kw) -> httpx.Response:
-    return httpx.request(method, f"{API_URL}{path}", auth=API_AUTH, timeout=90, **kw)
+    kw.setdefault("timeout", 90)
+    return httpx.request(method, f"{API_URL}{path}", auth=API_AUTH, **kw)
 
 
 def wake_api() -> None:
-    if st.session_state.get("api_awake"):
+    if not wake.wake_api(lambda **kw: api("GET", "/health", **kw), notice, API_URL):
         return
-    with st.spinner("Waking the API. Render's free tier can take up to a minute on first load."):
-        try:
-            api("GET", "/health").raise_for_status()
-            st.session_state.api_awake = True
-            st.session_state.known_patient = api("GET", "/demo/known-patient").json().get("patient_id")
-        except httpx.HTTPError as e:
-            notice("API unreachable.", f"{API_URL}: {e}")
-            st.stop()
+    try:
+        st.session_state.known_patient = api("GET", "/demo/known-patient").json().get("patient_id")
+    except (httpx.HTTPError, ValueError):
+        pass  # the presets fall back to the seeded demo patient
 
 
 gate()
