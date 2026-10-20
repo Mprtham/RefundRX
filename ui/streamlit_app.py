@@ -1,9 +1,12 @@
 """RefundRx demo UI. Talks to the FastAPI service over HTTP; holds no decision logic."""
 import os
 from datetime import date, timedelta
+from html import escape
 
 import httpx
 import streamlit as st
+
+import theme
 
 API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 API_AUTH = (
@@ -11,16 +14,11 @@ API_AUTH = (
     if os.getenv("API_BASIC_AUTH_USER") and os.getenv("API_BASIC_AUTH_PASSWORD") else None
 )
 APP_PASSWORD = os.getenv("APP_PASSWORD")
+GITHUB_URL = "https://github.com/Mprtham/RefundRX"
+DESIGN_DOC_URL = f"{GITHUB_URL}#readme"
 
 st.set_page_config(page_title="RefundRx", page_icon=":material/receipt_long:", layout="wide")
-
-# Small, targeted CSS on top of the config.toml theme: timeline rail + tighter header.
-st.html("""
-<style>
-  .block-container { padding-top: 2.2rem; }
-  .st-key-timeline [data-testid="stVerticalBlock"] > div { border-left: 2px solid #30363D; padding-left: 14px; }
-</style>
-""")
+theme.apply()
 
 TOOL_LABELS = {
     "check_fp57_receipt": "checked FP57 receipt",
@@ -30,6 +28,29 @@ TOOL_LABELS = {
     "check_duplicate": "checked for duplicate refund",
     "calculate_refund": "verified patient & payment, calculated refund",
 }
+PILLS = {
+    "APPROVED": ("APPROVED", "rr-pill-approved"),
+    "REJECTED": ("REJECTED", "rr-pill-rejected"),
+    "NO_CLAIM_MADE": ("NO CLAIM MADE", "rr-pill-none"),
+}
+
+
+# --- small HTML helpers (styling lives in theme.py) --------------------------
+def mono(text) -> str:
+    return f"<span class='rr-mono'>{escape(str(text))}</span>"
+
+
+def short_hash(h: str | None, n: int = 12) -> str:
+    return mono(f"{h[:n]}…") if h else "<span class='rr-muted'>none</span>"
+
+
+def pill(decision: str) -> str:
+    label, cls = PILLS.get(decision, (decision, "rr-pill-none"))
+    return f"<span class='rr-pill {cls}'>{escape(label)}</span>"
+
+
+def notice(title: str, text: str) -> None:
+    st.html(f"<div class='rr-notice'><b>{escape(title)}</b>{escape(text)}</div>")
 
 
 # --- access gate (basic auth for the public demo) ---------------------------
@@ -37,12 +58,12 @@ def gate() -> None:
     if not APP_PASSWORD or st.session_state.get("authed"):
         return
     with st.container(border=True, width=420):
-        st.subheader("RefundRx demo")
+        st.html("<div class='rr-wordmark'>RefundRx</div><p class='rr-sub'>Enter the demo password to continue.</p>")
         pw = st.text_input("Demo password", type="password")
         if st.button("Enter", type="primary"):
             st.session_state.authed = pw == APP_PASSWORD
             if not st.session_state.authed:
-                st.error("Incorrect password.")
+                notice("Incorrect password.", "")
             st.rerun()
     st.stop()
 
@@ -54,50 +75,56 @@ def api(method: str, path: str, **kw) -> httpx.Response:
 def wake_api() -> None:
     if st.session_state.get("api_awake"):
         return
-    with st.spinner("Waking up — Render free tier can take up to a minute on first load…"):
+    with st.spinner("Waking the API. Render's free tier can take up to a minute on first load."):
         try:
             api("GET", "/health").raise_for_status()
             st.session_state.api_awake = True
             st.session_state.known_patient = api("GET", "/demo/known-patient").json().get("patient_id")
         except httpx.HTTPError as e:
-            st.error(f"API unreachable at {API_URL}: {e}")
+            notice("API unreachable.", f"{API_URL}: {e}")
             st.stop()
 
 
 gate()
 
-# --- sidebar: the FDE narrative ---------------------------------------------
-with st.sidebar:
-    st.title(":material/receipt_long: RefundRx")
-    st.caption("Agentic FP57 prescription-charge refund decisions, with an audit trail you can verify.")
+# --- header ------------------------------------------------------------------
+st.html(f"""
+<div class='rr-header'>
+  <span class='rr-wordmark'>RefundRx</span>
+  <nav class='rr-nav'><a href='{GITHUB_URL}' target='_blank'>GitHub</a><a href='{DESIGN_DOC_URL}' target='_blank'>Design doc</a></nav>
+</div>
+<p class='rr-lede'>An agent that decides NHSBSA FP57 prescription-charge refund claims against hard policy rules.<br>
+<span>Every plan, tool call and decision is logged and hash-chained, so you can audit how it decided.</span></p>
+""")
+
+with st.expander("About this project"):
     st.markdown("""
-**What** — An agent that decides NHSBSA FP57 refund claims for patients who paid a
+**What.** An agent that decides NHSBSA FP57 refund claims for patients who paid a
 prescription charge but held an exemption (age, maternity, medical, HC2).
 
-**Why** — The one UK "pharmacy refund" that is real. Pharmacies never refund dispensed
+**Why.** The one UK "pharmacy refund" that is real. Pharmacies never refund dispensed
 medicines; FP57 is the only route.
 
-**Need** — Each claim turns on hard rules: an FP57 issued *at payment*, a 3-months-less-a-day
+**Need.** Each claim turns on hard rules: an FP57 issued *at payment*, a 3-months-less-a-day
 window, a valid exemption, and one refund per form.
 
-**Gap** — LLM agents are rarely evaluated on *how* they decide, and their decisions are
+**Gap.** LLM agents are rarely evaluated on *how* they decide, and their decisions are
 rarely auditable.
 
-**Bridge** — Planner → Gather → Decision in LangGraph. The plan is generated, every tool
+**Bridge.** Planner, Gather, Decision in LangGraph. The plan is generated, every tool
 call is logged, `policy_rules` is the sole authority, and RAG text is citation only.
 Every decision is hash-chained.
 
-**Impact** — Ten DeepEval scenarios score plan quality, plan adherence and tool
+**Impact.** Ten DeepEval scenarios score plan quality, plan adherence and tool
 correctness, not just the final answer.
 """)
-    st.divider()
     st.caption("Out of scope: PPC refunds, HC3 partial help.")
     st.caption("Demonstration system using synthetic data only. Not validated for clinical, regulatory, "
                "or GxP use. No real patient data is processed. Not indemnified for real decisions.")
 
 wake_api()
 
-# --- claim form -------------------------------------------------------------
+# --- sidebar: scenario presets -----------------------------------------------
 today = date.today()
 known = st.session_state.get("known_patient") or "9999900001"
 PRESETS = {
@@ -109,9 +136,12 @@ PRESETS = {
     "Information-only question": dict(),
 }
 
-st.header("Submit a claim")
-preset = st.segmented_control("Scenario preset", list(PRESETS), default="Eligible claim")
+with st.sidebar:
+    st.html("<p class='rr-label'>Scenario presets</p>")
+    preset = st.radio("Scenario preset", list(PRESETS), index=0, label_visibility="collapsed")
+    st.html("<p class='rr-sub'>Synthetic data only. Pick a scenario, then run the agent.</p>")
 preset = preset or "Eligible claim"
+
 # Kept in session state so resubmitting the same reference exercises the duplicate check.
 st.session_state.setdefault("form_ref", f"FP57-DEMO-{os.urandom(3).hex().upper()}")
 values = {
@@ -121,80 +151,156 @@ values = {
     **PRESETS[preset],
 }
 
-with st.form("claim"):
-    if preset == "Information-only question":
-        question = st.text_input("Question", "What is the time limit for claiming an FP57 refund?")
-    else:
-        c1, c2 = st.columns(2)
-        with c1:
-            patient_id = st.text_input("Patient ID (999 test range)", values["patient_id"])
-            form_ref = st.text_input("FP57 form reference", key="form_ref",
-                                     help="Resubmit the same reference to see the duplicate check.")
-            category = st.selectbox("Exemption category", ["HC2", "MATERNITY", "AGE", "MEDICAL"],
-                                    index=["HC2", "MATERNITY", "AGE", "MEDICAL"].index(values["exemption_category"]))
-        with c2:
-            paid = st.date_input("Charge paid", values["charge_paid_date"], max_value=today)
-            submitted = st.date_input("Claim submitted", values["claim_submitted_date"], max_value=today)
+form_col, result_col = st.columns([5, 6], gap="large")
+
+# --- claim form -------------------------------------------------------------
+with form_col:
+    st.html(f"<p class='rr-label'>Claim · {escape(preset)}</p>")
+    with st.form("claim"):
+        if preset == "Information-only question":
+            question = st.text_input("Question", "What is the time limit for claiming an FP57 refund?")
+        else:
+            c1, c2 = st.columns(2)
+            with c1:
+                patient_id = st.text_input("Patient ID (999 test range)", values["patient_id"])
+                form_ref = st.text_input("FP57 form reference", key="form_ref",
+                                         help="Resubmit the same reference to see the duplicate check.")
+                category = st.selectbox("Exemption category", ["HC2", "MATERNITY", "AGE", "MEDICAL"],
+                                        index=["HC2", "MATERNITY", "AGE", "MEDICAL"].index(values["exemption_category"]))
+            with c2:
+                paid = st.date_input("Charge paid", values["charge_paid_date"], max_value=today, format="YYYY-MM-DD")
+                submitted = st.date_input("Claim submitted", values["claim_submitted_date"], max_value=today,
+                                          format="YYYY-MM-DD")
             receipt = st.toggle("FP57 receipt issued at payment", values["fp57_receipt_issued"])
             paid_ok = st.toggle("Charge payment verified", values["charge_payment_verified"])
-    go = st.form_submit_button("Run agent", type="primary", icon=":material/play_arrow:")
+        go = st.form_submit_button("Run agent", type="primary")
 
-if go:
-    if preset == "Information-only question":
-        r = api("POST", "/info", json={"question": question})
+    run_error = None
+    if go:
+        with st.spinner("Running the agent: planning, gathering evidence, deciding."):
+            try:
+                if preset == "Information-only question":
+                    r = api("POST", "/info", json={"question": question})
+                else:
+                    r = api("POST", "/claims", json={
+                        "patient_id": patient_id, "fp57_form_ref": form_ref, "charge_paid_date": paid.isoformat(),
+                        "claim_submitted_date": submitted.isoformat(), "exemption_category": category,
+                        "fp57_receipt_issued": receipt, "charge_payment_verified": paid_ok,
+                    })
+                st.session_state.last = (r.status_code, r.json())
+            except httpx.HTTPError as e:
+                run_error = f"{API_URL}: {e}"
+    if run_error:
+        notice("Request failed.", run_error)
+
+
+# --- result panel --------------------------------------------------------------
+def render_result(status: int, body: dict) -> str:
+    if status != 200:
+        detail = body.get("detail") if isinstance(body, dict) else None
+        fields = ", ".join(".".join(str(p) for p in d.get("loc", [])[1:]) for d in detail
+                           if isinstance(d, dict)) if isinstance(detail, list) else ""
+        return (f"<div class='rr-panel'><div class='rr-decision'>{mono(f'HTTP {status}')}</div>"
+                f"<div class='rr-notice'><b>Rejected at the API boundary.</b>The Planner never ran, so there is "
+                f"no plan and no trace.{' Invalid: ' + escape(fields) + '.' if fields else ''}</div></div>")
+
+    refund = f"<span class='rr-refund'>£{escape(body['refund_amount'])}</span>" if body.get("refund_amount") else ""
+    reasons = "".join(f"<li>{escape(r)}</li>" for r in body.get("reasons") or [])
+    out = [
+        "<div class='rr-panel'>",
+        f"<div class='rr-decision'>{pill(body['decision'])}{mono(body['reason_code'])}{refund}</div>",
+        f"<ul class='rr-reasons'>{reasons}</ul>" if reasons else "",
+    ]
+
+    plan = body["plan"]
+    out.append(f"<div class='rr-section'><p class='rr-label'>Plan · {len(plan)} steps · {mono(body['model_version'])}</p>")
+    if plan:
+        out.append("<ol class='rr-plan'>" + "".join(f"<li>{mono(s)}</li>" for s in plan) + "</ol>")
     else:
-        r = api("POST", "/claims", json={
-            "patient_id": patient_id, "fp57_form_ref": form_ref, "charge_paid_date": paid.isoformat(),
-            "claim_submitted_date": submitted.isoformat(), "exemption_category": category,
-            "fp57_receipt_issued": receipt, "charge_payment_verified": paid_ok,
-        })
-    st.session_state.last = (r.status_code, r.json())
+        out.append(f"<p class='rr-step-detail'>{escape(body.get('planner_error') or 'No plan.')}</p>")
+    out.append("</div>")
 
-# --- result: ClaimResponse JSON beside a readable trace timeline -------------
-if "last" in st.session_state:
-    status, body = st.session_state.last
-    left, right = st.columns([1, 1])
-    with left:
-        st.subheader("ClaimResponse")
-        st.json(body, expanded=2)
-    with right:
-        st.subheader("Trace timeline")
-        if status != 200:
-            st.error(f"HTTP {status} — rejected at the API boundary before the Planner ran. No plan, no trace.")
-        else:
-            with st.container(key="timeline"):
-                plan = body["plan"]
-                st.markdown(f":blue[**Planner**] generated plan ({len(plan)} steps) · `{body['model_version']}`")
-                st.caption(" → ".join(plan) if plan else (body.get("planner_error") or "no plan"))
-                for t in body["trace"]:
-                    passed = t["result"].get("passed")
-                    icon = {True: ":green[:material/check_circle:]", False: ":red[:material/cancel:]",
-                            None: ":blue[:material/menu_book:]"}[passed]
-                    st.markdown(f"{icon} **Gather** {TOOL_LABELS[t['tool']]}")
-                    st.caption(t["result"].get("detail", ""))
-                colour = {"APPROVED": "green", "REJECTED": "red"}.get(body["decision"], "blue")
-                st.markdown(f":{colour}[**Decision: {body['decision']}**] · `{body['reason_code']}`"
-                            + (f" · refund £{body['refund_amount']}" if body.get("refund_amount") else ""))
-                if body.get("audit_id"):
-                    st.caption(f"audit_id {body['audit_id']} · hash {body['current_hash'][:16]}…")
-            if body.get("citation"):
-                with st.container(border=True):
-                    st.markdown(f":material/format_quote: **Policy citation** — {body['citation']['heading']}")
-                    st.caption(body["citation"]["text"])
-                    st.caption(f"Citation only; `policy_rules` decides. Retriever: {body['citation']['backend']}")
+    if body["trace"]:
+        steps = []
+        for t in body["trace"]:
+            passed = t["result"].get("passed")
+            tag = {True: "PASS", False: "FAIL", None: "REF"}[passed]
+            steps.append(
+                f"<li class='rr-step{' rr-step-fail' if passed is False else ''}'>"
+                f"<div class='rr-step-head'>{mono(t['tool'])}<span class='rr-muted'>{escape(TOOL_LABELS.get(t['tool'], ''))}</span>"
+                f"<span class='rr-result{' rr-result-fail' if passed is False else ''}'>{tag}</span></div>"
+                f"<div class='rr-step-detail'>{escape(str(t['result'].get('detail', '')))}</div></li>"
+            )
+        out.append("<div class='rr-section'><p class='rr-label'>Trace</p><ol class='rr-trace'>"
+                   + "".join(steps) + "</ol></div>")
 
-# --- audit integrity ---------------------------------------------------------
-st.divider()
-st.subheader("Audit log")
-st.caption("Integrity-checked, not externally anchored: detects casual edits, not an attacker with database access.")
-if st.button("Verify Audit Integrity", icon=":material/verified_user:"):
-    v = api("GET", "/audit/verify").json()
-    (st.success if v["ok"] else st.error)(v["message"])
+    if c := body.get("citation"):
+        out.append(
+            "<div class='rr-section'><p class='rr-label'>Policy citation</p><div class='rr-citation'>"
+            f"<h4>{escape(c['heading'])}</h4><p>{escape(c['text'])}</p>"
+            f"<p class='rr-muted'>Citation only; {mono('policy_rules')} decides. Retriever: {mono(c['backend'])}</p>"
+            "</div></div>"
+        )
 
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #8B949E; font-size: 0.9em;'>"
-    "Built by <b>Prathamesh Mishra</b> | FDE Portfolio Project"
-    "</div>",
-    unsafe_allow_html=True
-)
+    out.append(
+        "<div class='rr-section rr-meta'>"
+        f"<span>audit_id {mono(body.get('audit_id') if body.get('audit_id') is not None else 'none')}</span>"
+        f"<span>hash {short_hash(body.get('current_hash'), 16)}</span>"
+        f"<span>trace {mono(body['trace_id'][:8])}</span></div>"
+    )
+    out.append("</div>")
+    return "".join(out)
+
+
+with result_col:
+    st.html("<p class='rr-label'>Result</p>")
+    if "last" in st.session_state:
+        st.html(render_result(*st.session_state.last))
+    else:
+        st.html("<div class='rr-empty'><strong>No decision yet.</strong>"
+                "Pick a scenario in the sidebar and run the agent.<br>"
+                "The decision, plan, trace and policy citation appear here.</div>")
+
+# --- audit log ------------------------------------------------------------------
+st.html("<p class='rr-h2'>Audit log</p><p class='rr-sub'>Latest decisions, newest first. "
+        "Each row's hash covers the previous row's hash.</p>")
+try:
+    rows = api("GET", "/audit/recent", params={"limit": 10}).json()
+except (httpx.HTTPError, ValueError) as e:
+    rows = None
+    notice("Could not load the audit log.", str(e))
+if isinstance(rows, list) and rows:
+    body_rows = "".join(
+        "<tr>"
+        f"<td>{mono(r['audit_id'])}</td>"
+        f"<td>{mono(r['created_at'][:19].replace('T', ' '))}</td>"
+        f"<td>{pill(r['decision'])}</td>"
+        f"<td>{mono(r['model_version'])}</td>"
+        f"<td>{short_hash(r['prev_hash'])}</td>"
+        f"<td>{short_hash(r['current_hash'])}</td>"
+        "</tr>"
+        for r in rows
+    )
+    st.html("<div class='rr-table-wrap'><table class='rr-table'><thead><tr><th>audit_id</th><th>created_at</th>"
+            "<th>decision</th><th>model_version</th><th>prev_hash</th><th>current_hash</th></tr></thead>"
+            f"<tbody>{body_rows}</tbody></table></div>")
+elif rows is not None:
+    st.html("<div class='rr-empty'>No audit entries yet. Run a claim to write the first one.</div>")
+
+# --- audit integrity -------------------------------------------------------------
+btn_col, verify_col = st.columns([1, 4], vertical_alignment="center")
+with btn_col:
+    verify = st.button("Verify Audit Integrity", type="primary")
+with verify_col:
+    if verify:
+        try:
+            v = api("GET", "/audit/verify").json()
+            st.html(f"<div class='rr-verify'><b>{'Chain intact.' if v['ok'] else 'Chain broken.'}</b>"
+                    f"<span>{escape(v['message'])}</span>"
+                    "<span class='rr-muted'>integrity-checked, not externally anchored</span></div>")
+        except httpx.HTTPError as e:
+            notice("Verification failed.", str(e))
+    else:
+        st.html("<div class='rr-verify rr-muted'>integrity-checked, not externally anchored</div>")
+
+st.html("<div class='rr-footer'>Built by <b>Prathamesh Mishra</b> | FDE Portfolio Project</div>")

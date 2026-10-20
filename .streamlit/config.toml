@@ -3,30 +3,35 @@ toolbarMode = "minimal"
 showErrorDetails = false
 
 [theme]
-base = "dark"
-primaryColor = "#3B82F6"
-backgroundColor = "#0D1117"
-secondaryBackgroundColor = "#161B22"
-textColor = "#E6EDF3"
-borderColor = "#30363D"
-linkColor = "#58A6FF"
-codeBackgroundColor = "#161B22"
-greenColor = "#3FB950"
-redColor = "#F85149"
-orangeColor = "#D29922"
-blueColor = "#58A6FF"
-grayColor = "#8B949E"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+base = "light"
+# Ink, not Streamlit blue: drives buttons, toggles, radios and focus rings.
+primaryColor = "#111111"
+backgroundColor = "#F7F6F3"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#2F3437"
+borderColor = "#EAEAEA"
+linkColor = "#2F3437"
+codeBackgroundColor = "#F1F0EC"
+greenColor = "#346538"
+redColor = "#9F2F2D"
+orangeColor = "#956400"
+yellowColor = "#956400"
+blueColor = "#2F3437"
+violetColor = "#2F3437"
+grayColor = "#787774"
+font = "Geist, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+headingFont = "Geist, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+codeFont = "'Geist Mono', ui-monospace, Menlo, Consolas, monospace:https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap"
+codeFontSize = "0.8125rem"
 baseFontSize = 15
-headingFontWeights = [700, 600, 600, 600, 500, 500]
-baseRadius = "10px"
-buttonRadius = "8px"
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+baseRadius = "5px"
+buttonRadius = "5px"
 showWidgetBorder = true
 showSidebarBorder = true
 linkUnderline = false
 
 [theme.sidebar]
-backgroundColor = "#010409"
-secondaryBackgroundColor = "#0D1117"
-borderColor = "#21262D"
+backgroundColor = "#F7F6F3"
+secondaryBackgroundColor = "#FFFFFF"
+borderColor = "#EAEAEA"
