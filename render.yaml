@@ -17,10 +17,10 @@ services:
         sync: false
       - key: API_BASIC_AUTH_PASSWORD
         sync: false
-      # bge-small + onnxruntime fits the free tier's 512 MB but leaves little headroom;
-      # set to "keyword" if the service is OOM-killed.
+      # keyword: ~150 MB and no model download at startup. qdrant (bge-small +
+      # onnxruntime) measured ~430 MB, too close to the free tier's 512 MB.
       - key: RAG_BACKEND
-        value: qdrant
+        value: keyword
       - key: RATE_LIMIT_PER_MINUTE
         value: "20"
 
