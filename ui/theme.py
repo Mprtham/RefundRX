@@ -74,13 +74,12 @@ input[aria-label="FP57 form reference"] {{ font-family: var(--rr-mono); font-siz
 .rr-muted {{ color: var(--rr-muted); }}
 .rr-label {{ font-size: 0.75rem; font-weight: 500; color: var(--rr-muted); letter-spacing: 0.02em; margin: 0 0 0.5rem; }}
 
-.rr-header {{ display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid var(--rr-border); padding-bottom: 0.75rem; margin-bottom: 0.9rem; }}
+.rr-linkbar {{ display: flex; justify-content: flex-end;
+  padding: 0.25rem 0 0.75rem; margin-bottom: 0.5rem; }}
+.rr-anchor {{ scroll-margin-top: 1.5rem; }}
 .rr-wordmark {{ font-family: var(--rr-sans); font-weight: 600; font-size: 1.05rem; color: var(--rr-ink); letter-spacing: -0.02em; }}
 .rr-nav a {{ color: var(--rr-text); text-decoration: none; font-size: 0.8125rem; margin-left: 1.25rem; }}
 .rr-nav a:hover {{ color: var(--rr-ink); text-decoration: underline; text-underline-offset: 3px; }}
-.rr-lede {{ font-size: 0.9375rem; line-height: 1.55; color: var(--rr-text); max-width: 52rem; margin: 0 0 0.9rem; }}
-.rr-lede span {{ color: var(--rr-muted); }}
 
 .rr-panel {{ border: 1px solid var(--rr-border); border-radius: 6px; background: var(--rr-surface); padding: 1.25rem; }}
 .rr-section {{ border-top: 1px solid var(--rr-border); padding-top: 1rem; margin-top: 1rem; }}
@@ -168,8 +167,7 @@ input[aria-label="FP57 form reference"] {{ font-family: var(--rr-mono); font-siz
 /* --- Motion ----------------------------------------------------------------- */
 @keyframes rr-rise {{ from {{ opacity: 0; transform: translateY(12px); }} to {{ opacity: 1; transform: none; }} }}
 @keyframes rr-fade {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
-.rr-header {{ animation: rr-rise 0.5s var(--rr-ease) both; }}
-.rr-lede {{ animation: rr-rise 0.55s var(--rr-ease) 0.08s both; }}
+.rr-linkbar {{ animation: rr-fade 0.5s var(--rr-ease) 0.3s both; }}
 .rr-story-row {{ animation: rr-rise 0.6s var(--rr-ease) both; }}
 .rr-story-row:nth-child(1) {{ animation-delay: 0.16s; }}
 .rr-story-row:nth-child(2) {{ animation-delay: 0.24s; }}

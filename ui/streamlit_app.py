@@ -18,6 +18,7 @@ API_AUTH = (
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 GITHUB_URL = "https://github.com/Mprtham/RefundRX"
 DESIGN_DOC_URL = f"{GITHUB_URL}#architecture"
+HERO = (Path(__file__).parent / "hero.html").read_text(encoding="utf-8")
 TAMPER_DEMO = (Path(__file__).parent / "tamper_demo.html").read_text(encoding="utf-8")
 
 st.set_page_config(page_title="RefundRx", page_icon=":material/receipt_long:", layout="wide")
@@ -90,14 +91,12 @@ def wake_api() -> None:
 
 gate()
 
-# --- header ------------------------------------------------------------------
+# --- hero (copied from site/index.html) and links ---------------------------
+components.html(HERO, height=720)
 st.html(f"""
-<div class='rr-header'>
-  <span class='rr-wordmark'>RefundRx</span>
+<div class='rr-linkbar'>
   <nav class='rr-nav'><a href='{GITHUB_URL}' target='_blank'>GitHub</a><a href='{DESIGN_DOC_URL}' target='_blank'>Design doc</a></nav>
 </div>
-<p class='rr-lede'>An agent that decides NHSBSA FP57 prescription-charge refund claims against hard policy rules.<br>
-<span>Every plan, tool call and decision is logged and hash-chained, so you can audit how it decided.</span></p>
 """)
 
 # --- story: why, problem, what (copy shared with site/index.html) ------------
@@ -162,6 +161,8 @@ values = {
     **PRESETS[preset],
 }
 
+# Scroll target for the hero's "Run the agent" button.
+st.html("<div id='claim-form' class='rr-anchor'></div>")
 form_col, result_col = st.columns([5, 6], gap="large")
 
 # --- claim form -------------------------------------------------------------
