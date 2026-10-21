@@ -143,16 +143,43 @@ PRESETS = {
     "Unknown patient": dict(patient_id="9999900404"),
     "Charge never paid": dict(charge_payment_verified=False),
     "Information-only question": dict(),
+    "Duplicate claim": dict(),
 }
+# Same pattern as the hero's "Run the agent" button: reach into the parent page and
+# scroll to the claim-form anchor. The nonce makes Streamlit remount the frame, so it runs again.
+SCROLL_TO_FORM = """<script>
+try {{
+  var d = window.parent.document, t = d.getElementById('claim-form');
+  var reduce = window.parent.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (t) t.scrollIntoView({{ behavior: reduce ? 'auto' : 'smooth', block: 'start' }});
+}} catch (err) {{ /* sandboxed: do nothing */ }}
+</script><!-- {nonce} -->"""
+
+
+def new_form_ref() -> str:
+    return f"FP57-DEMO-{os.urandom(3).hex().upper()}"
+
+
+def on_preset_change() -> None:
+    # Each preset gets a fresh reference, so only a deliberate resubmission (same preset
+    # run twice, or the "Duplicate claim" preset) exercises the duplicate check.
+    if st.session_state.preset == "Duplicate claim" and st.session_state.get("last_approved_ref"):
+        st.session_state.form_ref = st.session_state.last_approved_ref
+    else:
+        st.session_state.form_ref = new_form_ref()
+    st.session_state.scroll_nonce = st.session_state.get("scroll_nonce", 0) + 1
+
 
 with st.sidebar:
     st.html("<p class='rr-label'>Scenario presets</p>")
-    preset = st.radio("Scenario preset", list(PRESETS), index=0, label_visibility="collapsed")
+    preset = st.radio("Scenario preset", list(PRESETS), index=0, key="preset", on_change=on_preset_change,
+                      label_visibility="collapsed")
     st.html("<p class='rr-sub'>Synthetic data only. Pick a scenario, then run the agent.</p>")
+    if nonce := st.session_state.get("scroll_nonce"):
+        components.html(SCROLL_TO_FORM.format(nonce=nonce), height=0)
 preset = preset or "Eligible claim"
 
-# Kept in session state so resubmitting the same reference exercises the duplicate check.
-st.session_state.setdefault("form_ref", f"FP57-DEMO-{os.urandom(3).hex().upper()}")
+st.session_state.setdefault("form_ref", new_form_ref())
 values = {
     "patient_id": known,
     "charge_paid_date": today - timedelta(days=10), "claim_submitted_date": today,
@@ -167,6 +194,8 @@ form_col, result_col = st.columns([5, 6], gap="large")
 # --- claim form -------------------------------------------------------------
 with form_col:
     st.html(f"<p class='rr-label'>Claim · {escape(preset)}</p>")
+    if preset == "Duplicate claim" and not st.session_state.get("last_approved_ref"):
+        notice("No approved claim yet.", "Run the Eligible claim preset first; this preset then reuses its form reference.")
     with st.form("claim"):
         if preset == "Information-only question":
             question = st.text_input("Question", "What is the time limit for claiming an FP57 refund?")
@@ -199,6 +228,8 @@ with form_col:
                         "fp57_receipt_issued": receipt, "charge_payment_verified": paid_ok,
                     })
                 st.session_state.last = (r.status_code, r.json())
+                if r.status_code == 200 and st.session_state.last[1].get("decision") == "APPROVED":
+                    st.session_state.last_approved_ref = form_ref
             except httpx.HTTPError as e:
                 run_error = f"{API_URL}: {e}"
     if run_error:
