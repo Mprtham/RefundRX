@@ -30,7 +30,8 @@ def api_url(tmp_path_factory):
     db = tmp_path_factory.mktemp("ui") / "ui.db"
     env = {**os.environ, "DATABASE_URL": f"sqlite+aiosqlite:///{db.as_posix()}", "RAG_BACKEND": "keyword",
            "GROQ_API_KEY": "", "PLANNER_BACKEND": "auto", "API_BASIC_AUTH_USER": "", "API_BASIC_AUTH_PASSWORD": "",
-           "RATE_LIMIT_PER_MINUTE": "1000"}
+           "RATE_LIMIT_PER_MINUTE": "1000",
+           "RATE_LIMIT_GLOBAL_PER_MINUTE": "1000"}
     subprocess.run([sys.executable, "-m", "scripts.seed_db", "--reset"], cwd=ROOT, env=env, check=True,
                    capture_output=True)
     with socket.socket() as s:

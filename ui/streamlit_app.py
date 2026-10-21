@@ -74,16 +74,34 @@ def gate() -> None:
     st.stop()
 
 
+def visitor_ip() -> str | None:
+    """The visitor's address as Render's edge reports it, for the API's per-visitor rate limit.
+
+    A spoofed value only moves the visitor to another per-visitor bucket; the API's global cap still holds.
+    """
+    h = st.context.headers
+    forwarded = (h.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return h.get("True-Client-IP") or h.get("CF-Connecting-IP") or forwarded or None
+
+
 def api(method: str, path: str, **kw) -> httpx.Response:
     kw.setdefault("timeout", 90)
+    if visitor := visitor_ip():
+        kw["headers"] = {"X-RefundRx-Visitor": visitor, **kw.get("headers", {})}
     return httpx.request(method, f"{API_URL}{path}", auth=API_AUTH, **kw)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def known_patient() -> str | None:
+    # Raises on failure, so only a successful lookup is cached.
+    return api("GET", "/demo/known-patient").raise_for_status().json().get("patient_id")
 
 
 def wake_api() -> None:
     if not wake.wake_api(lambda **kw: api("GET", "/health", **kw), notice, API_URL):
         return
     try:
-        st.session_state.known_patient = api("GET", "/demo/known-patient").json().get("patient_id")
+        st.session_state.known_patient = known_patient()
     except (httpx.HTTPError, ValueError):
         pass  # the presets fall back to the seeded demo patient
 

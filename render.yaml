@@ -23,6 +23,8 @@ services:
         value: keyword
       - key: RATE_LIMIT_PER_MINUTE
         value: "20"
+      - key: RATE_LIMIT_GLOBAL_PER_MINUTE
+        value: "60"
 
   - type: web
     name: refundrx-ui

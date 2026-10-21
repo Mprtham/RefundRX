@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     rag_backend: str = "qdrant"
     api_basic_auth_user: str | None = None
     api_basic_auth_password: str | None = None
+    # Per visitor (when the UI forwards one) and across all callers; 0 disables either.
     rate_limit_per_minute: int = 20
+    rate_limit_global_per_minute: int = 60
 
 
 @lru_cache

@@ -1,4 +1,5 @@
 import logging
+import math
 import secrets
 import time
 from collections import defaultdict, deque
@@ -60,22 +61,43 @@ def require_auth(creds: HTTPBasicCredentials | None = Depends(_basic)) -> None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, headers={"WWW-Authenticate": "Basic"})
 
 
-# --- in-memory sliding-window rate limit (per client IP, per process) -------
+# --- in-memory sliding-window rate limit (per process) ---------------------
+# Every limited request counts toward one global bucket. The UI names the visitor
+# in VISITOR_HEADER; that header is trusted only when basic auth is configured
+# (so the caller holds the API credentials) and then also gets its own, smaller
+# bucket, so one visitor cannot spend everyone's allowance. X-Forwarded-For is
+# ignored: on Render it carries the UI server's address, and it is spoofable.
+VISITOR_HEADER = "x-refundrx-visitor"
+WINDOW_S = 60
 _hits: dict[str, deque] = defaultdict(deque)
 
 
-def rate_limit(request: Request) -> None:
-    limit = get_settings().rate_limit_per_minute
-    if limit <= 0:
-        return
-    now = time.monotonic()
-    key = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0]
+def _wait(key: str, limit: int, now: float) -> int | None:
+    """Seconds until key's bucket has room, or None if it has room now."""
     q = _hits[key]
-    while q and now - q[0] > 60:
+    while q and now - q[0] >= WINDOW_S:
         q.popleft()
-    if len(q) >= limit:
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded; try again in a minute.")
-    q.append(now)
+    if not q:
+        del _hits[key]
+        return None
+    return max(1, math.ceil(WINDOW_S - (now - q[0]))) if len(q) >= limit else None
+
+
+def rate_limit(request: Request, _: None = Depends(require_auth)) -> None:
+    s = get_settings()
+    now = time.monotonic()
+    buckets = {"global": s.rate_limit_global_per_minute}
+    visitor = request.headers.get(VISITOR_HEADER)
+    if visitor and s.api_basic_auth_user and s.api_basic_auth_password:
+        buckets[f"visitor:{visitor[:64]}"] = s.rate_limit_per_minute
+    buckets = {k: n for k, n in buckets.items() if n > 0}
+    waits = [w for k, n in buckets.items() if (w := _wait(k, n, now)) is not None]
+    if waits:
+        wait = max(waits)
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"Rate limit exceeded; retry in {wait}s.",
+                            headers={"Retry-After": str(wait)})
+    for k in buckets:
+        _hits[k].append(now)
 
 
 @app.exception_handler(RequestValidationError)
@@ -85,7 +107,7 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors()), "stage": "api_boundary"})
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])  # never rate limited: Render and keep-alive poll it
 async def health():
     return {"status": "ok"}
 
